@@ -4,8 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 
 /**
- * Easylife bootstrap: shared lifecycle, updater, and independently registered modules.
- * New automation systems only need to implement AutomationModule and register here.
+ * Shared Easylife launcher. Each workflow owns its state and UI handlers.
  */
 public final class SCAutoAuctionClient implements ClientModInitializer {
     private long updateCheckTicks;
@@ -13,8 +12,12 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         EasyLifeConfig.load();
+        EasyLifeSystemConfig.load();
+
         ModuleRegistry.register(new AuctionModule());
+        ModuleRegistry.register(new PriceExtractorModule());
         ModuleRegistry.initialize();
+
         EasyLifeUpdater.checkForUpdates(false);
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             if (++updateCheckTicks >= 20L * 60 * 60 * 6) {
