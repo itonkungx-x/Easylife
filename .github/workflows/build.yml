@@ -19,6 +19,91 @@ jobs:
           gradle-version: '9.6.1'
       - name: Build JAR
         run: gradle --no-daemon clean build
+      - name: Regression check Fabric Loader linkage
+        run: |
+          set -euo pipefail
+          JAR="$(find build/libs -maxdepth 1 -name 'Easylife-in-Siamcraft-26.3-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -s "$JAR"
+          jar tf "$JAR" | grep -q '^org/itonkung/scautoauction/PriceExtractorModule.class        run: |
+          set -euo pipefail
+          test -f "build/classes/java/main/org/itonkung/scautoauction/EasyLifeInstaller.class"
+          JAR="$(find build/libs -maxdepth 1 -name 'Easylife-in-Siamcraft-26.3-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -s "$JAR"
+          DIR="$(mktemp -d)"
+          mkdir -p "$DIR/mods" "$DIR/easylife-updater"
+          printf 'old-jar' > "$DIR/mods/previous.jar"
+          cp "$JAR" "$DIR/easylife-updater/pending.jar"
+          jar cfe "$DIR/install-helper.jar" org.itonkung.scautoauction.EasyLifeInstaller -C build/classes/java/main org/itonkung/scautoauction/EasyLifeInstaller.class
+          java -jar "$DIR/install-helper.jar" 999999999 "$DIR/easylife-updater/pending.jar" "$DIR/mods/previous.jar"
+          cmp "$JAR" "$DIR/mods/previous.jar"
+          test ! -e "$DIR/easylife-updater/pending.jar"
+          echo "Shutdown installation smoke test passed."
+      - name: Upload JAR as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Easylife-in-Siamcraft-26.3-jar
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+          if-no-files-found: error
+      - name: Publish new version automatically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^mod_version=//p' gradle.properties | head -n 1)
+          test -n "$VERSION"
+          TAG="v${VERSION}"
+          JAR="build/libs/Easylife-in-Siamcraft-26.3-${VERSION}.jar"
+          test -s "$JAR"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already published; preserving immutable release assets."
+            exit 0
+          fi
+          gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "Easylife in Siamcraft $TAG (Minecraft 26.3)" --notes "Fabric client mod. Thai/English settings, auction queue automation and secure update support." --latest
+
+          if jar tf "$JAR" | grep -q '^net/fabricmc/loader/api/FabricLoader.class        run: |
+          set -euo pipefail
+          test -f "build/classes/java/main/org/itonkung/scautoauction/EasyLifeInstaller.class"
+          JAR="$(find build/libs -maxdepth 1 -name 'Easylife-in-Siamcraft-26.3-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -s "$JAR"
+          DIR="$(mktemp -d)"
+          mkdir -p "$DIR/mods" "$DIR/easylife-updater"
+          printf 'old-jar' > "$DIR/mods/previous.jar"
+          cp "$JAR" "$DIR/easylife-updater/pending.jar"
+          jar cfe "$DIR/install-helper.jar" org.itonkung.scautoauction.EasyLifeInstaller -C build/classes/java/main org/itonkung/scautoauction/EasyLifeInstaller.class
+          java -jar "$DIR/install-helper.jar" 999999999 "$DIR/easylife-updater/pending.jar" "$DIR/mods/previous.jar"
+          cmp "$JAR" "$DIR/mods/previous.jar"
+          test ! -e "$DIR/easylife-updater/pending.jar"
+          echo "Shutdown installation smoke test passed."
+      - name: Upload JAR as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Easylife-in-Siamcraft-26.3-jar
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+          if-no-files-found: error
+      - name: Publish new version automatically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^mod_version=//p' gradle.properties | head -n 1)
+          test -n "$VERSION"
+          TAG="v${VERSION}"
+          JAR="build/libs/Easylife-in-Siamcraft-26.3-${VERSION}.jar"
+          test -s "$JAR"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already published; preserving immutable release assets."
+            exit 0
+          fi
+          gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "Easylife in Siamcraft $TAG (Minecraft 26.3)" --notes "Fabric client mod. Thai/English settings, auction queue automation and secure update support." --latest
+; then
+            echo "ERROR: bundled a fake Fabric Loader API class"
+            exit 1
+          fi
+          javap -classpath "$JAR" -verbose org.itonkung.scautoauction.EasyLifeSystemConfig | grep -q 'InterfaceMethodref.*FabricLoader.getInstance'
+          echo "FabricLoader.getInstance() linked as InterfaceMethodref."
+
       - name: Smoke-test safe shutdown installer
         run: |
           set -euo pipefail
