@@ -6,17 +6,23 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.dialog.DialogScreen;
+import net.minecraft.client.gui.screens.dialog.WaitingForResponseScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -196,8 +202,8 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                     halt(mc, "จำนวนช่องกรอกไม่ตรงภาพตัวอย่าง (พบ " + inputs.size() + ")");
                     return;
                 }
-                Button vault = buttonWithText(screen, "vault");
-                Button override = buttonWithText(screen, "override");
+                AbstractWidget vault = widgetWithText(screen, "vault");
+                AbstractWidget override = widgetWithText(screen, "override");
                 Button submit = buttonWithText(screen, "ส่งเข้าคิว");
                 if (submit == null) submit = buttonWithText(screen, "submit");
                 if (vault == null || override == null || submit == null || !submit.active) {
@@ -227,7 +233,7 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                     halt(mc, "ไม่พบการนำไอเท็มออกหลังส่ง โปรดตรวจคิวก่อนเริ่มใหม่");
                     return;
                 }
-                if (screen != null && screen != activeDialog && !(screen instanceof DialogScreen<?>)) {
+                if (screen != null && screen != activeDialog && !(screen instanceof DialogScreen<?>) && !(screen instanceof WaitingForResponseScreen)) {
                     halt(mc, "มีหน้าต่างแทรกหลังส่งประมูล");
                     return;
                 }
@@ -260,17 +266,54 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         return title.contains("ประมูล") || title.contains("auction");
     }
 
+    /**
+     * Minecraft 26.3 DialogScreen embeds its text fields inside a
+     * ScrollableLayout.Container, which is itself a single top-level child.
+     * Recurse through ContainerEventHandler.children() rather than reading
+     * only Screen.children().
+     */
+    private static List<GuiEventListener> allControls(Screen screen) {
+        List<GuiEventListener> results = new ArrayList<>();
+        Set<GuiEventListener> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (GuiEventListener child : screen.children()) {
+            collectControls(child, results, seen, 0);
+        }
+        return results;
+    }
+
+    private static void collectControls(GuiEventListener widget, List<GuiEventListener> results,
+                                        Set<GuiEventListener> seen, int depth) {
+        if (depth > 20 || !seen.add(widget)) return;
+        results.add(widget);
+        if (widget instanceof ContainerEventHandler container) {
+            for (GuiEventListener nested : container.children()) {
+                collectControls(nested, results, seen, depth + 1);
+            }
+        }
+    }
+
     private static List<EditBox> textBoxes(Screen screen) {
         List<EditBox> fields = new ArrayList<>();
-        for (GuiEventListener item : screen.children()) {
+        for (GuiEventListener item : allControls(screen)) {
             if (item instanceof EditBox box) fields.add(box);
         }
         fields.sort(Comparator.comparingInt(EditBox::getY).thenComparingInt(EditBox::getX));
         return fields;
     }
 
+    // Currency and Override may be widgets other than a vanilla Button.
+    private static AbstractWidget widgetWithText(Screen screen, String text) {
+        for (GuiEventListener item : allControls(screen)) {
+            if (item instanceof AbstractWidget widget && widget.getMessage().getString()
+                .toLowerCase(Locale.ROOT).contains(text.toLowerCase(Locale.ROOT))) {
+                return widget;
+            }
+        }
+        return null;
+    }
+
     private static Button buttonWithText(Screen screen, String text) {
-        for (GuiEventListener item : screen.children()) {
+        for (GuiEventListener item : allControls(screen)) {
             if (item instanceof Button button && button.getMessage().getString()
                 .toLowerCase(Locale.ROOT).contains(text.toLowerCase(Locale.ROOT))) {
                 return button;
