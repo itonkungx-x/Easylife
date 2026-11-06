@@ -24,5 +24,6 @@
   "easylife.update.available": "พบเวอร์ชัน %s • กำลังดาวน์โหลด…",
   "easylife.update.ready": "ดาวน์โหลดเวอร์ชัน %s แล้ว • ปิดและเปิดเกมใหม่เพื่อติดตั้ง",
   "easylife.update.error": "อัปเดตไม่สำเร็จ: %s",
-  "easylife.update.no_release": "ยังไม่มี GitHub Release สำหรับตรวจอัปเดต"
+  "easylife.update.no_release": "ยังไม่มี GitHub Release สำหรับตรวจอัปเดต",
+  "easylife.update.manual_available": "พบเวอร์ชันใหม่ %s • เปิดอัปเดตอัตโนมัติแล้วบันทึกเพื่อติดตั้ง"
 }

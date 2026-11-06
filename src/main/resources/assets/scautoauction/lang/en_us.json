@@ -24,5 +24,6 @@
   "easylife.update.available": "Version %s found • downloading…",
   "easylife.update.ready": "Version %s ready • restart Minecraft to install",
   "easylife.update.error": "Update failed: %s",
-  "easylife.update.no_release": "No GitHub Release is available yet"
+  "easylife.update.no_release": "No GitHub Release is available yet",
+  "easylife.update.manual_available": "Version %s available • enable automatic updates and save to install"
 }

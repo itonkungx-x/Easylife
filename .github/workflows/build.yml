@@ -1,10 +1,10 @@
-name: Build SC-AutoAuction (Fabric 26.3)
+name: Build & Release Easylife in Siamcraft
 on:
   push:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,11 +18,26 @@ jobs:
         with:
           gradle-version: '9.6.1'
       - name: Build JAR
-        run: gradle --no-daemon build
-      - uses: actions/upload-artifact@v4
+        run: gradle --no-daemon clean build
+      - name: Upload JAR as artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: SC-AutoAuction-26.3-jar
+          name: Easylife-in-Siamcraft-26.3-jar
           path: |
             build/libs/*.jar
             !build/libs/*-sources.jar
           if-no-files-found: error
+      - name: Publish new version automatically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^mod_version=//p' gradle.properties | head -n 1)
+          test -n "$VERSION"
+          TAG="v${VERSION}"
+          JAR="build/libs/Easylife-in-Siamcraft-26.3-${VERSION}.jar"
+          test -s "$JAR"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already published; preserving immutable release assets."
+            exit 0
+          fi
+          gh release create "$TAG" "$JAR" --target "$GITHUB_SHA" --title "Easylife in Siamcraft $TAG (Minecraft 26.3)" --notes "Fabric client mod. Thai/English settings, auction queue automation and secure update support." --latest
