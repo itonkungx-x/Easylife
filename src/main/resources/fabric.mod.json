@@ -11,9 +11,9 @@
   "environment": "client",
   "icon": "assets/scautoauction/icon.png",
   "contact": {
-    "homepage": "https://github.com/itonkungx-x/SC-AutoAuction",
-    "sources": "https://github.com/itonkungx-x/SC-AutoAuction",
-    "issues": "https://github.com/itonkungx-x/SC-AutoAuction/issues"
+    "homepage": "https://github.com/itonkungx-x/Easylife",
+    "sources": "https://github.com/itonkungx-x/Easylife",
+    "issues": "https://github.com/itonkungx-x/Easylife/issues"
   },
   "entrypoints": {
     "client": [
@@ -36,7 +36,7 @@
     "modmenu": {
       "update_checker": false,
       "links": {
-        "modmenu.github": "https://github.com/itonkungx-x/SC-AutoAuction"
+        "modmenu.github": "https://github.com/itonkungx-x/Easylife"
       }
     }
   }
