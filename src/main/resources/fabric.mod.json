@@ -3,7 +3,7 @@
   "id": "scautoauction",
   "version": "${version}",
   "name": "Easylife in Siamcraft",
-  "description": "มอดช่วยใช้ชีวิตใน Siamcraft: ลงประมูลอัตโนมัติทีละช่อง ปรับการตั้งค่าได้ และอัปเดตจาก GitHub Releases โดยอัตโนมัติ | Quality-of-life client mod: one-slot-per-listing auction automation, configurable defaults and automatic GitHub Releases updates.",
+  "description": "ม็อดที่ช่วยให้ชีวิตคุณสบายขึ้นสำหรับทีมงาน Siamcraft",
   "authors": [
     "น้องต้นสุดหล่อ",
     "Chatgpt"

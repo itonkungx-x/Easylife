@@ -16,6 +16,8 @@ public final class EasyLifeSettingsScreen extends Screen {
     private Component warning = Component.empty();
     private int top;
     private int left;
+    private int columnWidth;
+    private int columnStep;
     private static final String[] LABEL_KEYS = {
         "easylife.setting.starting_price",
         "easylife.setting.increment",
@@ -35,12 +37,14 @@ public final class EasyLifeSettingsScreen extends Screen {
     protected void init() {
         super.init();
         top = Math.max(34, (this.height - 327) / 2);
-        left = this.width / 2 - 230;
+        columnWidth = Math.min(222, Math.max(110, (this.width - 64) / 2 - 9));
+        columnStep = columnWidth + 16;
+        left = (this.width - (2 * columnWidth + 16)) / 2;
         String[] values = draft.formValues();
         for (int i = 0; i < auctionFields.length; i++) {
-            int x = left + (i % 2) * 240;
+            int x = left + (i % 2) * columnStep;
             int y = top + (i / 2) * 46;
-            EditBox box = new EditBox(this.font, x, y + 16, 222, 20, Component.translatable(LABEL_KEYS[i]));
+            EditBox box = new EditBox(this.font, x, y + 16, columnWidth, 20, Component.translatable(LABEL_KEYS[i]));
             box.setMaxLength(i == 5 ? 32 : 18);
             box.setValue(values[i]);
             auctionFields[i] = this.addRenderableWidget(box);
@@ -49,22 +53,22 @@ public final class EasyLifeSettingsScreen extends Screen {
         autoUpdateButton = this.addRenderableWidget(Button.builder(updateButtonTitle(), button -> {
             draft.autoUpdate = !draft.autoUpdate;
             button.setMessage(updateButtonTitle());
-        }).bounds(left, top + 157, 222, 22).build());
+        }).bounds(left, top + 157, columnWidth, 22).build());
 
         this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.check_updates"), button -> {
             EasyLifeUpdater.checkForUpdates(true);
-        }).bounds(left + 240, top + 157, 222, 22).build());
+        }).bounds(left + columnStep, top + 157, columnWidth, 22).build());
 
-        delayField = new EditBox(this.font, left, top + 204, 222, 20,
+        delayField = new EditBox(this.font, left, top + 204, columnWidth, 20,
             Component.translatable("easylife.setting.delay"));
         delayField.setMaxLength(3);
         delayField.setValue(Integer.toString(draft.betweenListingsTicks));
         this.addRenderableWidget(delayField);
 
         this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.save"), button -> saveAndClose())
-            .bounds(left, top + 278, 222, 24).build());
+            .bounds(left, top + 278, columnWidth, 24).build());
         this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.cancel"), button -> onClose())
-            .bounds(left + 240, top + 278, 222, 24).build());
+            .bounds(left + columnStep, top + 278, columnWidth, 24).build());
     }
 
     private Component updateButtonTitle() {
@@ -93,7 +97,7 @@ public final class EasyLifeSettingsScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // Siamcraft gold-on-charcoal settings panel.
         int x0 = left - 14;
-        int x1 = left + 476;
+        int x1 = left + 2 * columnWidth + 30;
         int y0 = top - 36;
         int y1 = top + 313;
         graphics.fill(x0, y0, x1, y1, 0xE51B171C);
@@ -103,9 +107,11 @@ public final class EasyLifeSettingsScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         int titleY = Math.max(8, top - 25);
         graphics.centeredText(this.font, this.title, this.width / 2, titleY, 0xFFFFB342);
+        graphics.text(this.font, Component.translatable("easylife.settings.module_auction"),
+            left, top - 11, 0xFFFFD99A);
 
         for (int i = 0; i < auctionFields.length; i++) {
-            int x = left + (i % 2) * 240;
+            int x = left + (i % 2) * columnStep;
             int y = top + (i / 2) * 46;
             graphics.text(this.font, Component.translatable(LABEL_KEYS[i]), x, y + 2, 0xFFEAEAEA);
         }
@@ -113,7 +119,9 @@ public final class EasyLifeSettingsScreen extends Screen {
         String version = FabricLoader.getInstance().getModContainer("scautoauction")
             .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("?");
         graphics.text(this.font, Component.translatable("easylife.settings.version", version),
-            left + 240, top + 188, 0xFFAAAAAA);
+            left + columnStep, top + 188, 0xFFAAAAAA);
+        graphics.text(this.font, Component.translatable("easylife.settings.future"),
+            left, top + 219, 0xFFB8C3D2);
         graphics.text(this.font, Component.translatable("easylife.settings.restart_hint"),
             left, top + 232, 0xFFB8C3D2);
         graphics.text(this.font, EasyLifeUpdater.getStatusText(), left, top + 247, 0xFFF5CE74);
