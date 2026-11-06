@@ -34,9 +34,9 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
     private static final int INTER_ITEM_WAIT = 20;
 
     private static final KeyMapping TOGGLE = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-        "key.scautoauction.toggle", InputConstants.Type.KEYSYM, InputConstants.KEY_F8, KeyMapping.Category.MISC));
+        "key.scautoauction.toggle", InputConstants.Type.KEYBOARD, InputConstants.KEY_F8, KeyMapping.Category.MISC));
     private static final KeyMapping STOP = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-        "key.scautoauction.stop", InputConstants.Type.KEYSYM, InputConstants.KEY_F9, KeyMapping.Category.MISC));
+        "key.scautoauction.stop", InputConstants.Type.KEYBOARD, InputConstants.KEY_F9, KeyMapping.Category.MISC));
 
     private enum Phase { IDLE, NEXT, SWITCHING, OPENING, FILLING, ACCEPTING, COOLDOWN }
     private record Job(int slot, ItemStack stack) { }
