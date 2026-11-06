@@ -2,15 +2,25 @@
   "schemaVersion": 1,
   "id": "scautoauction",
   "version": "${version}",
-  "name": "SC-AutoAuction",
-  "description": "Client-side sequential auction dialog automation",
+  "name": "Easylife in Siamcraft",
+  "description": "มอดช่วยใช้ชีวิตใน Siamcraft: ลงประมูลอัตโนมัติทีละช่อง ปรับการตั้งค่าได้ และอัปเดตจาก GitHub Releases โดยอัตโนมัติ | Quality-of-life client mod: one-slot-per-listing auction automation, configurable defaults and automatic GitHub Releases updates.",
   "authors": [
-    "SC-AutoAuction contributors"
+    "น้องต้นสุดหล่อ",
+    "Chatgpt"
   ],
   "environment": "client",
+  "icon": "assets/scautoauction/icon.png",
+  "contact": {
+    "homepage": "https://github.com/itonkungx-x/SC-AutoAuction",
+    "sources": "https://github.com/itonkungx-x/SC-AutoAuction",
+    "issues": "https://github.com/itonkungx-x/SC-AutoAuction/issues"
+  },
   "entrypoints": {
     "client": [
       "org.itonkung.scautoauction.SCAutoAuctionClient"
+    ],
+    "modmenu": [
+      "org.itonkung.scautoauction.EasyLifeModMenu"
     ]
   },
   "depends": {
@@ -18,5 +28,16 @@
     "minecraft": "26.3",
     "java": ">=25",
     "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": ">=21.0.0"
+  },
+  "custom": {
+    "modmenu": {
+      "update_checker": false,
+      "links": {
+        "modmenu.github": "https://github.com/itonkungx-x/SC-AutoAuction"
+      }
+    }
   }
 }
