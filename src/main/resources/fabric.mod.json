@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "scautoauction",
+  "version": "${version}",
+  "name": "SC-AutoAuction",
+  "description": "Client-side sequential auction dialog automation",
+  "authors": [
+    "SC-AutoAuction contributors"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "org.itonkung.scautoauction.SCAutoAuctionClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
