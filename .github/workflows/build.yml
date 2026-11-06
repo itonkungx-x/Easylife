@@ -19,6 +19,21 @@ jobs:
           gradle-version: '9.6.1'
       - name: Build JAR
         run: gradle --no-daemon clean build
+      - name: Smoke-test safe shutdown installer
+        run: |
+          set -euo pipefail
+          test -f "build/classes/java/main/org/itonkung/scautoauction/EasyLifeInstaller.class"
+          JAR="$(find build/libs -maxdepth 1 -name 'Easylife-in-Siamcraft-26.3-*.jar' ! -name '*-sources.jar' | head -n 1)"
+          test -s "$JAR"
+          DIR="$(mktemp -d)"
+          mkdir -p "$DIR/mods" "$DIR/easylife-updater"
+          printf 'old-jar' > "$DIR/mods/previous.jar"
+          cp "$JAR" "$DIR/easylife-updater/pending.jar"
+          jar cfe "$DIR/install-helper.jar" org.itonkung.scautoauction.EasyLifeInstaller -C build/classes/java/main org/itonkung/scautoauction/EasyLifeInstaller.class
+          java -jar "$DIR/install-helper.jar" 999999999 "$DIR/easylife-updater/pending.jar" "$DIR/mods/previous.jar"
+          cmp "$JAR" "$DIR/mods/previous.jar"
+          test ! -e "$DIR/easylife-updater/pending.jar"
+          echo "Shutdown installation smoke test passed."
       - name: Upload JAR as artifact
         uses: actions/upload-artifact@v4
         with:
