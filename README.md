@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.3.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.5.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -41,9 +41,9 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 4. เก็บ JAR ใหม่แยกจาก `mods` แล้วรอเกมปิด เพื่อให้ตัวช่วย Java ภายนอกติดตั้งแทนที่ไฟล์เดิมหลัง Minecraft ปิดสมบูรณ์.
 5. เปิด Minecraft ใหม่เพื่อใช้เวอร์ชันล่าสุด; ดูสถานะใน Mod Menu Settings และบันทึกที่ `config/easylife-updater/install.log`.
 
-**หมายเหตุ:** ต้องติดตั้ง 0.2.3 ด้วยตนเอง *ครั้งแรก* เนื่องจาก 0.1.1 ไม่มีระบบอัปเดตตัวเอง. การอัปเดตครั้งถัดไปไม่ต้องดาวน์โหลด JAR ด้วยตนเอง (ถ้าเกม/เครื่องอนุญาตให้เขียนไฟล์). ระบบไม่สามารถอัปเดต Minecraft, Fabric หรือ Mod Menu แทนได้.
+**หมายเหตุ:** ต้องติดตั้ง 0.2.5 ด้วยตนเอง *ครั้งแรก* เนื่องจาก 0.1.1 ไม่มีระบบอัปเดตตัวเอง. การอัปเดตครั้งถัดไปไม่ต้องดาวน์โหลด JAR ด้วยตนเอง (ถ้าเกม/เครื่องอนุญาตให้เขียนไฟล์). ระบบไม่สามารถอัปเดต Minecraft, Fabric หรือ Mod Menu แทนได้.
 
-**Notes:** Install v0.2.3 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
+**Notes:** Install v0.2.5 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
 
 ## Release workflow
 
@@ -75,3 +75,11 @@ have compatible item identities (or an empty slot after server consumption).
 The mod stops if an unexpected different item occupies the staging slot, to avoid moving it into the wrong slot.
 
 **ข้อจำกัด:** หน้าประมูลปิดไม่ได้ยืนยันว่าเซิร์ฟเวอร์รับรายการ จึงควรตรวจคิวจริง และทดสอบกับของราคาถูกก่อนลงทั้งหมด
+
+## v0.2.5 — Crash fix & Price Extractor
+- แก้ `IncompatibleClassChangeError: FabricLoader.getInstance() must be InterfaceMethodref` จากไฟล์ 0.2.4 ที่เคยประกอบ JAR ด้วย Stub API ผิดประเภท
+- Rebuild with the **real** Fabric Loader API using Fabric Loom and Java 25. GitHub Actions verifies the `InterfaceMethodref` bytecode and refuses JARs that bundle FabricLoader.
+- Preserves Auction / Price Extractor selector in Mod Menu. Selecting **Price Extractor** disables F8 auction submissions.
+- Hover items on the **/worth** inventory. Open `http://127.0.0.1:8787` for live item and price details; `/data` for the latest item; `/items` for collected entries. These endpoints are local only.
+- ⚠️ **Must manually install this fixed JAR once if you are on broken 0.2.4**, because that version crashes before its built-in updater can run. Remove old `0.2.4.jar` to prevent duplicate mod IDs.
+- Build/test limitation: Java compilation, Fabric API linkage, and shutdown updater smoke tests pass in CI; live-game hover scanning is not fully validated on a Siamcraft server yet.
