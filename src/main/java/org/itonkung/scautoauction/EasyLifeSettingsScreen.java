@@ -91,6 +91,15 @@ public final class EasyLifeSettingsScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        // Siamcraft gold-on-charcoal settings panel.
+        int x0 = left - 14;
+        int x1 = left + 476;
+        int y0 = top - 36;
+        int y1 = top + 313;
+        graphics.fill(x0, y0, x1, y1, 0xE51B171C);
+        graphics.outline(x0, y0, x1 - x0, y1 - y0, 0xFFFFA63E);
+        graphics.fillGradient(x0 + 1, y0 + 1, x1 - 1, y0 + 5, 0xFFFFD67E, 0xFFE67F22);
+        graphics.fill(x0 + 1, y1 - 29, x1 - 1, y1 - 28, 0x88F1A34F);
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         int titleY = Math.max(8, top - 25);
         graphics.centeredText(this.font, this.title, this.width / 2, titleY, 0xFFFFB342);
