@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.0.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.1.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -41,9 +41,9 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 4. เก็บ JAR ใหม่แยกจาก `mods` แล้วรอเกมปิด เพื่อให้ตัวช่วย Java ภายนอกติดตั้งแทนที่ไฟล์เดิมหลัง Minecraft ปิดสมบูรณ์.
 5. เปิด Minecraft ใหม่เพื่อใช้เวอร์ชันล่าสุด; ดูสถานะใน Mod Menu Settings และบันทึกที่ `config/easylife-updater/install.log`.
 
-**หมายเหตุ:** ต้องติดตั้ง 0.2.0 ด้วยตนเอง *ครั้งแรก* เนื่องจาก 0.1.1 ไม่มีระบบอัปเดตตัวเอง. การอัปเดตครั้งถัดไปไม่ต้องดาวน์โหลด JAR ด้วยตนเอง (ถ้าเกม/เครื่องอนุญาตให้เขียนไฟล์). ระบบไม่สามารถอัปเดต Minecraft, Fabric หรือ Mod Menu แทนได้.
+**หมายเหตุ:** ต้องติดตั้ง 0.2.1 ด้วยตนเอง *ครั้งแรก* เนื่องจาก 0.1.1 ไม่มีระบบอัปเดตตัวเอง. การอัปเดตครั้งถัดไปไม่ต้องดาวน์โหลด JAR ด้วยตนเอง (ถ้าเกม/เครื่องอนุญาตให้เขียนไฟล์). ระบบไม่สามารถอัปเดต Minecraft, Fabric หรือ Mod Menu แทนได้.
 
-**Notes:** Install v0.2.0 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
+**Notes:** Install v0.2.1 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
 
 ## Release workflow
 
