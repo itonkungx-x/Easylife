@@ -30,7 +30,8 @@ import java.util.Locale;
 /**
  * Fail-closed auction queue assistant.
  * One occupied inventory slot (one whole stack) = one listing.
- * It never retries ambiguous submits or changes the inventory outside server clicks.
+ * It never retries ambiguous submits. Server queue submissions leave the item in the hand;
+ * successful dialog closure is the completion signal, not item disappearance.
  */
 public final class SCAutoAuctionClient implements ClientModInitializer {
     private static final String[] FORM_VALUES = {"100", "10%", "0", "60", "11", "after1m"};
@@ -38,13 +39,14 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
     private static final int ACCEPT_TIMEOUT = 200;
     private static final int SWITCH_WAIT = 8;
     private static final int INTER_ITEM_WAIT = 20;
+    private static final int SETTLE_TICKS = 5;
 
     private static final KeyMapping TOGGLE = KeyMappingHelper.registerKeyMapping(new KeyMapping(
         "key.scautoauction.toggle", InputConstants.Type.KEYBOARD, InputConstants.KEY_F8, KeyMapping.Category.MISC));
     private static final KeyMapping STOP = KeyMappingHelper.registerKeyMapping(new KeyMapping(
         "key.scautoauction.stop", InputConstants.Type.KEYBOARD, InputConstants.KEY_F9, KeyMapping.Category.MISC));
 
-    private enum Phase { IDLE, NEXT, SWITCHING, OPENING, FILLING, ACCEPTING, COOLDOWN }
+    private enum Phase { IDLE, NEXT, SWITCHING, OPENING, FILLING, ACCEPTING, RESTORING, COOLDOWN }
     private record Job(int slot, ItemStack stack) { }
 
     private final List<Job> jobs = new ArrayList<>();
@@ -52,7 +54,9 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
     private int index;
     private int completed;
     private int ticks;
-    private int emptyTicks;
+    private int stableTicks;
+    private boolean staged;
+    private ItemStack displacedHotbarItem = ItemStack.EMPTY;
     private int selectedSlot;
     private ItemStack heldExpected = ItemStack.EMPTY;
     private Screen activeDialog;
@@ -97,7 +101,7 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         Inventory inventory = mc.player.getInventory();
         int selected = inventory.getSelectedSlot();
         jobs.clear();
-        // Exhaust the hotbar first, so later swaps always use an empty hotbar slot.
+        // Register one listing per occupied hotbar/inventory slot; the server leaves items in place.
         if (!inventory.getItem(selected).isEmpty()) {
             jobs.add(new Job(selected, inventory.getItem(selected).copy()));
         }
@@ -119,7 +123,9 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         completed = 0;
         index = 0;
         ticks = 0;
-        emptyTicks = 0;
+        stableTicks = 0;
+        staged = false;
+        displacedHotbarItem = ItemStack.EMPTY;
         originalConnection = mc.player.connection;
         activeDialog = null;
         phase = Phase.NEXT;
@@ -144,18 +150,18 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                     return;
                 }
                 heldExpected = job.stack().copy();
+                staged = job.slot() >= 9;
+                displacedHotbarItem = ItemStack.EMPTY;
 
-                if (job.slot() < 9) {
+                if (!staged) {
                     inventory.setSelectedSlot(job.slot());
                     selectedSlot = job.slot();
                 } else {
                     selectedSlot = inventory.getSelectedSlot();
-                    if (!inventory.getItem(selectedSlot).isEmpty()) {
-                        halt(mc, "Mainhand ไม่ว่างก่อนย้ายของ");
-                        return;
-                    }
-                    // Minecraft 26.3 uses ContainerInput.SWAP instead of ClickType.
-                    // Slot IDs 9..35 map directly to the non-hotbar inventory.
+                    displacedHotbarItem = inventory.getItem(selectedSlot).copy();
+                    // Slot IDs 9..35 are non-hotbar inventory slots.
+                    // SWAP temporarily exchanges the selected hotbar item with this inventory slot.
+                    // We restore the exact original positions after the queue dialog closes.
                     mc.gameMode.handleContainerInput(
                         mc.player.inventoryMenu.containerId,
                         job.slot(), selectedSlot, ContainerInput.SWAP, mc.player
@@ -172,8 +178,8 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                     halt(mc, "Mainhand ไม่ใช่ไอเท็มที่จะส่ง");
                     return;
                 }
-                if (job.slot() >= 9 && !inventory.getItem(job.slot()).isEmpty()) {
-                    halt(mc, "ย้ายจาก Inventory ไม่สำเร็จ");
+                if (staged && !ItemStack.matches(inventory.getItem(job.slot()), displacedHotbarItem)) {
+                    halt(mc, "สลับ Inventory มา Mainhand ไม่ถูกต้อง");
                     return;
                 }
                 mc.player.connection.sendCommand("auction queue add");
@@ -225,30 +231,58 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                 // Vanilla Button#onPress ignores its InputWithModifiers argument.
                 submit.onPress(null);
                 ticks = 0;
-                emptyTicks = 0;
+                stableTicks = 0;
                 phase = Phase.ACCEPTING;
             }
             case ACCEPTING -> {
                 if (++ticks > ACCEPT_TIMEOUT) {
-                    halt(mc, "ไม่พบการนำไอเท็มออกหลังส่ง โปรดตรวจคิวก่อนเริ่มใหม่");
+                    halt(mc, "หมดเวลารอเซิร์ฟเวอร์ปิดหน้าประมูลหลังส่ง ตรวจคิวก่อนเริ่มใหม่");
                     return;
                 }
-                if (screen != null && screen != activeDialog && !(screen instanceof DialogScreen<?>) && !(screen instanceof WaitingForResponseScreen)) {
+                if (screen != null && screen != activeDialog
+                    && !(screen instanceof DialogScreen<?>)
+                    && !(screen instanceof WaitingForResponseScreen)) {
                     halt(mc, "มีหน้าต่างแทรกหลังส่งประมูล");
                     return;
                 }
-                if (screen != null) { emptyTicks = 0; return; }
-                if (inventory.getItem(selectedSlot).isEmpty()) {
-                    if (++emptyTicks < 3) return;
-                    completed++;
-                    index++;
-                    message(mc, "ไอเท็มถูกนำออกจากมือ " + completed + "/" + jobs.size());
-                    activeDialog = null;
-                    ticks = 0;
-                    phase = Phase.COOLDOWN;
-                } else {
-                    emptyTicks = 0;
+                // The auction server queues a snapshot, keeping the original held item.
+                // Require the dialog to close and the original stack to remain stable.
+                if (screen != null) {
+                    stableTicks = 0;
+                    return;
                 }
+                if (!ItemStack.matches(inventory.getItem(selectedSlot), heldExpected)) {
+                    halt(mc, "ไอเท็มใน Mainhand เปลี่ยนหลังส่ง ตรวจคิวด้วยตนเอง");
+                    return;
+                }
+                if (++stableTicks < SETTLE_TICKS) return;
+                if (staged) {
+                    if (!ItemStack.matches(inventory.getItem(job.slot()), displacedHotbarItem)) {
+                        halt(mc, "ช่อง Inventory ถูกเปลี่ยนระหว่างส่งประมูล");
+                        return;
+                    }
+                    mc.gameMode.handleContainerInput(
+                        mc.player.inventoryMenu.containerId,
+                        job.slot(), selectedSlot, ContainerInput.SWAP, mc.player
+                    );
+                    ticks = 0;
+                    phase = Phase.RESTORING;
+                } else {
+                    finishJob(mc);
+                }
+            }
+            case RESTORING -> {
+                if (screen != null) {
+                    halt(mc, "มีหน้าต่างแทรกระหว่างคืนไอเท็ม");
+                    return;
+                }
+                if (++ticks < SWITCH_WAIT) return;
+                if (!ItemStack.matches(inventory.getItem(job.slot()), job.stack())
+                    || !ItemStack.matches(inventory.getItem(selectedSlot), displacedHotbarItem)) {
+                    halt(mc, "คืนไอเท็มเข้าช่องเดิมไม่สำเร็จ โปรดตรวจ Inventory");
+                    return;
+                }
+                finishJob(mc);
             }
             case COOLDOWN -> {
                 if (screen != null) { halt(mc, "หน้าต่างแทรกก่อนรายการถัดไป"); return; }
@@ -322,11 +356,47 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         return null;
     }
 
+    private void finishJob(Minecraft mc) {
+        completed++;
+        index++;
+        message(mc, "ส่งคำขอเข้าคิว " + completed + "/" + jobs.size()
+            + " (ไอเท็มยังอยู่ในช่องเดิม)");
+        activeDialog = null;
+        displacedHotbarItem = ItemStack.EMPTY;
+        heldExpected = ItemStack.EMPTY;
+        staged = false;
+        stableTicks = 0;
+        ticks = 0;
+        phase = Phase.COOLDOWN;
+    }
+
     private void halt(Minecraft mc, String reason) {
         int count = completed;
         int total = jobs.size();
+        // Restore a temporary inventory swap only when the game screen is closed
+        // and both stacks still exactly match our expected positions.
+        boolean restoredAttempted = false;
+        if (staged && phase != Phase.RESTORING && mc.player != null
+            && mc.gameMode != null && mc.gui.screen() == null
+            && index < jobs.size()) {
+            Inventory inventory = mc.player.getInventory();
+            Job job = jobs.get(index);
+            if (inventory.getSelectedSlot() == selectedSlot
+                && ItemStack.matches(inventory.getItem(selectedSlot), heldExpected)
+                && ItemStack.matches(inventory.getItem(job.slot()), displacedHotbarItem)) {
+                mc.gameMode.handleContainerInput(
+                    mc.player.inventoryMenu.containerId,
+                    job.slot(), selectedSlot, ContainerInput.SWAP, mc.player
+                );
+                restoredAttempted = true;
+            }
+        }
+        boolean tempSwap = staged;
         clear();
-        message(mc, "หยุด: " + reason + " | ไอเท็มถูกนำออกแล้ว " + count + "/" + total);
+        message(mc, "หยุด: " + reason + " | ส่งคำขอแล้ว " + count + "/" + total
+            + (tempSwap ? (restoredAttempted
+                ? " | ส่งคำสั่งคืนช่องเดิมแล้ว กรุณาตรวจ Inventory"
+                : " | ตรวจ Inventory เพราะอาจมีไอเท็มที่สลับช่องชั่วคราว") : ""));
     }
 
     private void clear() {
@@ -337,7 +407,9 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         heldExpected = ItemStack.EMPTY;
         index = 0;
         ticks = 0;
-        emptyTicks = 0;
+        stableTicks = 0;
+        staged = false;
+        displacedHotbarItem = ItemStack.EMPTY;
     }
 
     private static void message(Minecraft mc, String text) {
