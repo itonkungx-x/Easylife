@@ -49,6 +49,7 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
 
     private final List<Job> jobs = new ArrayList<>();
     private Phase phase = Phase.IDLE;
+    private long updateCheckTicks;
     private int index;
     private int completed;
     private int ticks;
@@ -74,6 +75,11 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
         while (TOGGLE.consumeClick()) {
             if (phase == Phase.IDLE) start(mc);
             else halt(mc, "หยุดด้วย F8");
+        }
+        // Also check for updates every six hours when Minecraft stays open.
+        if (++updateCheckTicks >= 20L * 60 * 60 * 6) {
+            updateCheckTicks = 0;
+            EasyLifeUpdater.checkForUpdates(false);
         }
         if (phase == Phase.IDLE) return;
         if (mc.player == null || mc.gameMode == null || mc.player.connection != originalConnection) {
