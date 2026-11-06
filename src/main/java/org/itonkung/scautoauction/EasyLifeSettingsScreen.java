@@ -1,7 +1,7 @@
 package org.itonkung.scautoauction;
 
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -90,32 +90,31 @@ public final class EasyLifeSettingsScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
-        this.renderBackground(graphics, mouseX, mouseY, delta);
-        super.render(graphics, mouseX, mouseY, delta);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        super.extractRenderState(graphics, mouseX, mouseY, delta);
         int titleY = Math.max(8, top - 25);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, titleY, 0xFFFFB342);
+        graphics.centeredText(this.font, this.title, this.width / 2, titleY, 0xFFFFB342);
 
         for (int i = 0; i < auctionFields.length; i++) {
             int x = left + (i % 2) * 240;
             int y = top + (i / 2) * 46;
-            graphics.drawString(this.font, Component.translatable(LABEL_KEYS[i]), x, y + 2, 0xFFEAEAEA);
+            graphics.text(this.font, Component.translatable(LABEL_KEYS[i]), x, y + 2, 0xFFEAEAEA);
         }
-        graphics.drawString(this.font, Component.translatable("easylife.setting.delay"), left, top + 188, 0xFFEAEAEA);
+        graphics.text(this.font, Component.translatable("easylife.setting.delay"), left, top + 188, 0xFFEAEAEA);
         String version = FabricLoader.getInstance().getModContainer("scautoauction")
             .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("?");
-        graphics.drawString(this.font, Component.translatable("easylife.settings.version", version),
+        graphics.text(this.font, Component.translatable("easylife.settings.version", version),
             left + 240, top + 188, 0xFFAAAAAA);
-        graphics.drawString(this.font, Component.translatable("easylife.settings.restart_hint"),
+        graphics.text(this.font, Component.translatable("easylife.settings.restart_hint"),
             left, top + 232, 0xFFB8C3D2);
-        graphics.drawString(this.font, EasyLifeUpdater.getStatusText(), left, top + 247, 0xFFF5CE74);
+        graphics.text(this.font, EasyLifeUpdater.getStatusText(), left, top + 247, 0xFFF5CE74);
         if (!warning.getString().isEmpty()) {
-            graphics.drawCenteredString(this.font, warning, this.width / 2, top + 263, 0xFFFF6666);
+            graphics.centeredText(this.font, warning, this.width / 2, top + 263, 0xFFFF6666);
         }
     }
 
     @Override
     public void onClose() {
-        this.minecraft.setScreen(parent);
+        this.minecraft.gui.setScreen(parent);
     }
 }
