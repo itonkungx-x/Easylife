@@ -34,11 +34,9 @@ import java.util.Locale;
  * successful dialog closure is the completion signal, not item disappearance.
  */
 public final class SCAutoAuctionClient implements ClientModInitializer {
-    private static final String[] FORM_VALUES = {"100", "10%", "0", "60", "11", "after1m"};
     private static final int FORM_TIMEOUT = 160;
     private static final int ACCEPT_TIMEOUT = 200;
     private static final int SWITCH_WAIT = 8;
-    private static final int INTER_ITEM_WAIT = 20;
     private static final int SETTLE_TICKS = 5;
 
     private static final KeyMapping TOGGLE = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -64,6 +62,8 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        EasyLifeConfig.load();
+        EasyLifeUpdater.checkForUpdates(false);
         ClientTickEvents.END_CLIENT_TICK.register(this::onTick);
     }
 
@@ -221,9 +221,10 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
                     halt(mc, "Override ไม่ได้ปิดอยู่");
                     return;
                 }
-                for (int i = 0; i < FORM_VALUES.length; i++) {
-                    inputs.get(i).setValue(FORM_VALUES[i]);
-                    if (!FORM_VALUES[i].equals(inputs.get(i).getValue())) {
+                String[] values = EasyLifeConfig.get().formValues();
+                for (int i = 0; i < values.length; i++) {
+                    inputs.get(i).setValue(values[i]);
+                    if (!values[i].equals(inputs.get(i).getValue())) {
                         halt(mc, "เซิร์ฟเวอร์ไม่ยอมรับค่าช่อง " + (i + 1));
                         return;
                     }
@@ -286,7 +287,7 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
             }
             case COOLDOWN -> {
                 if (screen != null) { halt(mc, "หน้าต่างแทรกก่อนรายการถัดไป"); return; }
-                if (++ticks >= INTER_ITEM_WAIT) {
+                if (++ticks >= EasyLifeConfig.get().betweenListingsTicks) {
                     ticks = 0;
                     phase = Phase.NEXT;
                 }
@@ -414,7 +415,7 @@ public final class SCAutoAuctionClient implements ClientModInitializer {
 
     private static void message(Minecraft mc, String text) {
         if (mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal("[SC-AutoAuction] " + text));
+            mc.player.sendSystemMessage(Component.literal("[Easylife] " + text));
         }
     }
 }
