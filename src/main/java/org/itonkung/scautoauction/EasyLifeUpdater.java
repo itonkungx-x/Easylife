@@ -27,7 +27,7 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
 public final class EasyLifeUpdater {
-    private static final String REPO = "itonkungx-x/SC-AutoAuction";
+    private static final String REPO = "itonkungx-x/Easylife";
     private static final String RELEASE_API = "https://api.github.com/repos/" + REPO + "/releases/latest";
     private static final String ASSET_PREFIX = "Easylife-in-Siamcraft-26.3-";
     private static final AtomicBoolean CHECKING = new AtomicBoolean(false);
