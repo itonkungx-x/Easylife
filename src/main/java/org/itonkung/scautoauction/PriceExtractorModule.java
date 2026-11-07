@@ -5,6 +5,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.minecraft.client.KeyMapping;
@@ -24,6 +26,8 @@ import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -52,6 +56,10 @@ public final class PriceExtractorModule implements AutomationModule {
     private static volatile String statusTh = "ยังไม่เริ่ม";
     private static volatile String statusEn = "Not started";
     private static volatile int itemCount, lastScanned, lastPriceLines;
+    private static volatile int observedTooltipCalls, observedTooltipPrices;
+    private static volatile int lastTooltipLines;
+    private static volatile String lastDetectedTitle = "-";
+    private static volatile String lastDiagnosticFile = "-";
 
     private HttpServer server;
     private int serverPort = -1;
@@ -69,8 +77,10 @@ public final class PriceExtractorModule implements AutomationModule {
         return lastError.isBlank() ? status : lastError;
     }
     public static String getDiagnostics() {
-        return "Slots: " + lastScanned + " • Price lines: " + lastPriceLines
-            + " • Total: " + itemCount;
+        return "Title: " + lastDetectedTitle + " | Slots " + lastScanned
+            + " | Priced " + lastPriceLines + " | Hover " + observedTooltipCalls
+            + "/" + observedTooltipPrices + " | Tooltip lines " + lastTooltipLines
+            + " | Saved " + itemCount;
     }
 
     public static synchronized void clearItems() {
@@ -80,12 +90,18 @@ public final class PriceExtractorModule implements AutomationModule {
         lastJson = "{}";
         lastPriceLines = 0;
         lastScanned = 0;
+        observedTooltipCalls = 0;
+        observedTooltipPrices = 0;
+        lastTooltipLines = 0;
+        lastDiagnosticFile = "-";
         statusTh = "ล้างข้อมูลแล้ว";
         statusEn = "Scan results cleared";
     }
 
     @Override public String id() { return "price_extractor"; }
     @Override public void initialize() {
+        ItemTooltipCallback.EVENT.register((stack, context, flag, lines) ->
+            observeRenderedTooltip(stack, lines));
         // KeyMapping.consumeClick() is normally not populated while a screen is open.
         // Listen for the registered F7 (or remapped) key inside the /worth container.
         ScreenEvents.AFTER_INIT.register((client, current, w, h) -> {
@@ -119,7 +135,8 @@ public final class PriceExtractorModule implements AutomationModule {
             return;
         }
         String title = screen.getTitle().getString();
-        if (!title.toLowerCase(Locale.ROOT).contains("worth")) {
+        lastDetectedTitle = title;
+        if (!isWorthTitle(title)) {
             statusTh = "รอเปิดหน้า /worth (" + title + ")";
             statusEn = "Waiting for /worth (" + title + ")";
             emptyRounds = 0;
@@ -137,7 +154,7 @@ public final class PriceExtractorModule implements AutomationModule {
         }
 
         // The last 36 slots represent player inventory in chest-like menus.
-        int topSlots = Math.max(0, slots.size() - 36);
+        int topSlots = slots.size() > 36 ? slots.size() - 36 : slots.size();
         if (topSlots == 0) {
             statusTh = "พบ /worth แต่ไม่พบช่องรายการ";
             statusEn = "/worth detected, no listing slots";
@@ -192,6 +209,7 @@ public final class PriceExtractorModule implements AutomationModule {
                 + " • ดูสถานะใน Easylife → สแกนราคา");
             System.err.println("[Easylife] /worth found " + seen
                 + " slots and " + examined + " tooltip lines, but no recognized price labels.");
+            saveDiagnostic(screen, slots, topSlots);
         } else if (linesFound > 0) {
             emptyRounds = 0;
             lastError = "";
@@ -237,16 +255,122 @@ public final class PriceExtractorModule implements AutomationModule {
                 if (!all.contains(value)) all.add(value);
             }
         }
+        lastTooltipLines = Math.max(lastTooltipLines, all.size());
         return all;
+    }
+
+
+    private static boolean isWorthTitle(String title) {
+        if (title == null) return false;
+        // Accept ordinary and full-width UI titles without scanning unrelated menus.
+        return title.toLowerCase(Locale.ROOT)
+            .replace("ｗ", "w").replace("ｏ", "o").replace("ｒ", "r")
+            .replace("ｔ", "t").replace("ｈ", "h").contains("worth");
+    }
+
+    /** Receives the tooltip Minecraft actually displays to the player at hover time. */
+    public static void observeRenderedTooltip(ItemStack stack, List<Component> lines) {
+        if (stack == null || stack.isEmpty() || lines == null || lines.isEmpty()) return;
+        if (!EasyLifeSystemConfig.get().priceExtractorEnabled) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.gui == null
+            || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
+            || !isWorthTitle(screen.getTitle().getString())) return;
+        observedTooltipCalls++;
+        List<String> raw = new ArrayList<>();
+        for (Component line : lines) raw.add(line.getString());
+        lastTooltipLines = Math.max(lastTooltipLines, raw.size());
+        PriceTextParser.Prices parsed = PriceTextParser.parse(raw);
+        if (!parsed.found()) return;
+        observedTooltipPrices++;
+        synchronized (PriceExtractorModule.class) {
+            String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            String name = stack.getHoverName().getString();
+            String key = id + "|" + name;
+            if (ENTRIES.size() >= MAX_ITEMS && !ENTRIES.containsKey(key)) return;
+            PriceEntry newItem = new PriceEntry(id, name,
+                parsed.perItem(), parsed.perStack(), Instant.now().toString());
+            PriceEntry old = ENTRIES.get(key);
+            if (old == null || !old.price.equals(newItem.price)
+                || !old.perStack.equals(newItem.perStack)) {
+                ENTRIES.put(key, newItem);
+                lastJson = JSON.toJson(newItem);
+                lastItem = name + " = " + newItem.price;
+            }
+            itemCount = ENTRIES.size();
+        }
+    }
+
+    /**
+     * Bounded diagnostics only; records item tooltip lines from the currently
+     * opened /worth screen, never the player's name, IP, credentials or chat.
+     * Written once per opened menu if scanning cannot recognize any prices.
+     */
+    private void saveDiagnostic(AbstractContainerScreen<?> screen,
+                                List<Slot> slots, int topSlots) {
+        try {
+            Map<String, Object> debug = new LinkedHashMap<>();
+            debug.put("mod", "Easylife");
+            debug.put("screenTitle", screen.getTitle().getString());
+            debug.put("slotsTotal", slots.size());
+            debug.put("topSlots", topSlots);
+            debug.put("visibleNonEmpty", lastScanned);
+            debug.put("recognizedPriceEntries", lastPriceLines);
+            debug.put("hoverCallbackCalls", observedTooltipCalls);
+            debug.put("hoverPricedCalls", observedTooltipPrices);
+            debug.put("lastError", lastError);
+            List<Object> samples = new ArrayList<>();
+            for (int i = 0; i < topSlots && samples.size() < 8; i++) {
+                ItemStack item = slots.get(i).getItem();
+                if (item.isEmpty()) continue;
+                Map<String, Object> sample = new LinkedHashMap<>();
+                sample.put("slot", i);
+                sample.put("itemId", BuiltInRegistries.ITEM.getKey(item.getItem()).toString());
+                sample.put("name", item.getHoverName().getString());
+                List<String> tooltip = itemTooltip(Minecraft.getInstance(), screen, item);
+                sample.put("tooltip", tooltip.subList(0, Math.min(16, tooltip.size())));
+                ItemLore lore = item.get(DataComponents.LORE);
+                if (lore != null) {
+                    List<String> loreText = new ArrayList<>();
+                    for (Component component : lore.lines()) loreText.add(component.getString());
+                    sample.put("lore", loreText.subList(0, Math.min(16, loreText.size())));
+                }
+                samples.add(sample);
+            }
+            debug.put("itemsSampled", samples);
+            Path path = FabricLoader.getInstance().getConfigDir()
+                .resolve("easylife-price-diagnostic.json");
+            Files.writeString(path, JSON.toJson(debug), StandardCharsets.UTF_8);
+            lastDiagnosticFile = path.toString();
+            say(Minecraft.getInstance(), "อ่านราคาไม่ได้ • บันทึกผลตรวจที่ config/easylife-price-diagnostic.json");
+        } catch (Exception exception) {
+            System.err.println("[Easylife] Unable to save diagnostic file: " + exception);
+        }
     }
 
     private static void toggleEnabled(Minecraft mc) {
         EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
-        cfg.priceExtractorEnabled = !cfg.priceExtractorEnabled;
-        EasyLifeSystemConfig.save(cfg);
-        say(mc, cfg.priceExtractorEnabled
-            ? "Price Extractor เปิดแล้ว • ระบบจะอ่านราคาใน /worth"
-            : "Price Extractor ปิดแล้ว • กด F7 อีกครั้งเพื่อเปิด");
+        // In /worth, F7 means "start/check" rather than accidentally switching
+        // off a scanner already enabled through the Mod Menu.
+        boolean insideWorth = mc != null && mc.gui != null
+            && mc.gui.screen() instanceof AbstractContainerScreen<?> screen
+            && isWorthTitle(screen.getTitle().getString());
+        if (insideWorth) {
+            if (cfg.priceExtractorEnabled) {
+                say(mc, "Price Scan เปิดอยู่แล้ว • รายการ " + itemCount
+                    + " • " + getDiagnostics());
+            } else {
+                cfg.priceExtractorEnabled = true;
+                EasyLifeSystemConfig.save(cfg);
+                say(mc, "เปิด Price Scan แล้ว • กำลังอ่าน /worth");
+            }
+        } else {
+            cfg.priceExtractorEnabled = !cfg.priceExtractorEnabled;
+            EasyLifeSystemConfig.save(cfg);
+            say(mc, cfg.priceExtractorEnabled
+                ? "Price Scan เปิดแล้ว • พิมพ์ /worth"
+                : "ปิด Price Scan แล้ว");
+        }
     }
 
     private static void say(Minecraft mc, String line) {
