@@ -33,3 +33,18 @@ java {
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
 }
+
+
+// Run the lightweight /worth price parsing regression checks without JUnit.
+// Gradle 9 treats plain main() tests as undiscovered unless run explicitly.
+tasks.named('test') {
+    failOnNoDiscoveredTests = false
+}
+tasks.register('testPriceParser', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.itonkung.scautoauction.PriceTextParserTest'
+}
+tasks.named('check') {
+    dependsOn tasks.named('testPriceParser')
+}
