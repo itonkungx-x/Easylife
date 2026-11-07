@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siamcraft • Price Extractor</title>
+<style>
+:root{color-scheme:dark;--gold:#ffbd48;--bg:#111216;--panel:#22242b}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 50% -40%,#4d3219 0%,var(--bg) 65%);font:14px system-ui,"Segoe UI",sans-serif;color:#f3f0e8;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1080px;margin:0 auto;padding:25px 20px 16px;border-bottom:1px solid #4b3d27;flex-wrap:wrap}
+.brand{font-weight:900;letter-spacing:.1em;font-size:16px;color:var(--gold)}
+.tools{display:flex;align-items:center;gap:12px;font-size:12px;color:#c7c0b5}
+select{padding:9px 34px 9px 12px;border:1px solid #a16d26;border-radius:9px;background:#242128;color:#f9f4ea}
+main{max-width:1080px;margin:0 auto;padding:24px 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(126px,1fr));gap:14px}
+.item{border:1px solid #454049;border-radius:16px;background:linear-gradient(165deg,#29272e,#1b1c22);min-height:146px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;box-shadow:0 5px 18px #0004}
+.item img{height:64px;width:64px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0px 5px 3px #0008)}
+.item .price{font-size:18px;font-weight:800;color:var(--gold);margin-top:12px;word-break:break-word}
+#empty{color:#b6b4bd;margin-top:55px;text-align:center}
+</style>
+</head>
+<body>
+<header><span class="brand">SIAMCRAFT PRICE EXTRACTOR</span><div class="tools"><span id="count">0 รายการ</span><label>เรียงตาม <select id="sort">
+<option value="az">ชื่อ A–Z</option>
+<option value="low">ราคาน้อย → มาก</option>
+<option value="high">ราคามาก → น้อย</option>
+</select></label></div></header>
+<main><div id="grid" class="grid"></div><p id="empty">เปิด /worth ในเกมเพื่อสแกนรายการที่แสดง</p></main>
+<script>
+const $ = id => document.getElementById(id);
+let items=[];
+function number(s){return Number(String(s||'0').replace(/,/g,''))||0;}
+function iconUrl(id,kind){
+ if(!/^minecraft:[a-z0-9_]+$/.test(id||'')) return '';
+ return 'https://mcasset.cloud/26.3/assets/minecraft/textures/'+kind+'/'+id.split(':')[1]+'.png';
+}
+function render(){
+ const sorted=[...items],mode=$('sort').value;
+ if(mode==='az') sorted.sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+ if(mode==='low') sorted.sort((a,b)=>number(a.price)-number(b.price));
+ if(mode==='high') sorted.sort((a,b)=>number(b.price)-number(a.price));
+ const grid=$('grid');grid.replaceChildren();
+ $('count').textContent=sorted.length+' รายการ';
+ $('empty').hidden=sorted.length>0;
+ for(const item of sorted){
+  const card=document.createElement('article');card.className='item';
+  card.title=item.name||item.itemId||'';
+  const img=document.createElement('img');
+  img.alt='';img.loading='lazy';img.src=iconUrl(item.itemId,'item');
+  img.onerror=()=>{if(img.dataset.retry)return;img.dataset.retry='1';img.src=iconUrl(item.itemId,'block');};
+  const price=document.createElement('strong');price.className='price';price.textContent=item.price ? '⛁ '+item.price : '—';
+  card.append(img,price);grid.append(card);
+ }
+}
+async function update(){
+ try{
+  const res=await fetch('/items',{cache:'no-store'});
+  if(!res.ok) return;
+  const list=await res.json();
+  if(Array.isArray(list)){items=list;render();}
+ }catch(_){}
+}
+$('sort').addEventListener('change',render);
+setInterval(update,1000);update();
+</script>
+</body>
+</html>
