@@ -22,6 +22,8 @@ public final class EasyLifeSystemConfig {
     public boolean priceExtractorEnabled = false;
     public boolean extractorNotifications = true;
     public int extractorPort = 8787;
+    /** Easylife-specific UI language. Independent of Minecraft client language. */
+    public String uiLanguage = "th_th";
     /** Legacy single-mode selection retained for migration only. */
     public String activeSystem = "auction";
 
@@ -68,11 +70,13 @@ public final class EasyLifeSystemConfig {
         c.priceExtractorEnabled = priceExtractorEnabled;
         c.extractorNotifications = extractorNotifications;
         c.extractorPort = extractorPort;
+        c.uiLanguage = uiLanguage;
         c.activeSystem = activeSystem;
         return c;
     }
 
     public void validate() {
+        if (!"en_us".equals(uiLanguage)) uiLanguage = "th_th";
         if (extractorPort < 1024 || extractorPort > 65535) {
             throw new IllegalArgumentException("พอร์ตเว็บต้องอยู่ระหว่าง 1024–65535");
         }
