@@ -187,6 +187,7 @@ public final class PriceExtractorModule implements AutomationModule {
                 + " slots and " + examined + " tooltip lines, but no recognized price labels.");
         } else if (linesFound > 0) {
             emptyRounds = 0;
+            lastError = "";
         }
     }
 

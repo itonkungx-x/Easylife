@@ -326,6 +326,11 @@ public final class EasyLifeSettingsScreen extends Screen {
         g.fill(left, 108, right, height - 45, 0xA91C1C21);
         g.fill(0, height - 46, width, height, 0xEA1A1B20);
         super.extractRenderState(g, mx, my, delta);
+        int tabSpace = Math.max(0, right - 145);
+        int tabWidth = Math.max(64, (tabSpace - 20) / TABS.length);
+        int selectedX = 145 + page.ordinal() * tabWidth;
+        g.outline(selectedX - 1, 12, tabWidth - 2, 24, 0xFFFFBF61);
+
 
         g.text(font, EasyLifeText.of("ui.search"), left + 6, searchY + 5, MUTED);
         g.text(font, EasyLifeText.of(TABS[page.ordinal()]), left + 12, topY - 22, GOLD);
