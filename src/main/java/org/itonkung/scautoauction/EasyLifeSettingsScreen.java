@@ -5,154 +5,268 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
+import java.awt.Desktop;
+import java.net.URI;
+
+/**
+ * Separate Auction and Price Extractor screens, with a Siamcraft-logo-only header.
+ * Native Minecraft key bindings are configured via the game's KeyBindsScreen.
+ */
 public final class EasyLifeSettingsScreen extends Screen {
+    private enum Page { HOME, AUCTION, EXTRACTOR }
+    private static final Identifier LOGO = Identifier.fromNamespaceAndPath(
+        "scautoauction", "textures/gui/siamcraft_logo.png");
+    private static final int GOLD = 0xFFFFC266;
+    private static final int TEXT = 0xFFF2EEE8;
+
     private final Screen parent;
-    private final EasyLifeConfig draft;
-    private final EasyLifeSystemConfig systemDraft;
-    private final EditBox[] auctionFields = new EditBox[6];
-    private EditBox delayField;
-    private EditBox extractorPortField;
-    private Button autoUpdateButton;
-    private Button systemButton;
-    private Component warning = Component.empty();
-    private int top;
-    private int left;
-    private int columnWidth;
-    private int columnStep;
-    private static final String[] LABEL_KEYS = {
-        "easylife.setting.starting_price",
-        "easylife.setting.increment",
-        "easylife.setting.buyout",
-        "easylife.setting.duration",
-        "easylife.setting.overtime",
-        "easylife.setting.start_time"
+    private final Page page;
+    private EasyLifeConfig auction;
+    private EasyLifeSystemConfig systems;
+    private final EditBox[] fields = new EditBox[6];
+    private EditBox delay;
+    private EditBox port;
+    private Component error = Component.empty();
+    private int left, top, contentWidth, halfWidth, gap;
+
+    private static final String[] AUCTION_FIELDS = {
+        "easylife.setting.starting_price", "easylife.setting.increment",
+        "easylife.setting.buyout", "easylife.setting.duration",
+        "easylife.setting.overtime", "easylife.setting.start_time"
     };
 
-    public EasyLifeSettingsScreen(Screen parent) {
+    public EasyLifeSettingsScreen(Screen parent) { this(parent, Page.HOME); }
+
+    private EasyLifeSettingsScreen(Screen parent, Page page) {
         super(Component.translatable("easylife.settings.title"));
         this.parent = parent;
-        this.draft = EasyLifeConfig.get().copy();
-        this.systemDraft = EasyLifeSystemConfig.get().copy();
+        this.page = page;
+        this.auction = EasyLifeConfig.get().copy();
+        this.systems = EasyLifeSystemConfig.get().copy();
     }
 
     @Override
     protected void init() {
         super.init();
-        top = Math.max(34, (this.height - 370) / 2);
-        columnWidth = Math.min(222, Math.max(110, (this.width - 64) / 2 - 9));
-        columnStep = columnWidth + 16;
-        left = (this.width - (2 * columnWidth + 16)) / 2;
-        String[] values = draft.formValues();
-        for (int i = 0; i < auctionFields.length; i++) {
-            int x = left + (i % 2) * columnStep;
-            int y = top + 30 + (i / 2) * 46;
-            EditBox box = new EditBox(this.font, x, y + 16, columnWidth, 20, Component.translatable(LABEL_KEYS[i]));
-            box.setMaxLength(i == 5 ? 32 : 18);
-            box.setValue(values[i]);
-            auctionFields[i] = this.addRenderableWidget(box);
+        contentWidth = Math.min(444, Math.max(244, width - 32));
+        left = (width - contentWidth) / 2;
+        top = Math.max(6, (height - 372) / 2);
+        gap = 14;
+        halfWidth = (contentWidth - gap) / 2;
+        error = Component.empty();
+
+        switch (page) {
+            case HOME -> homeControls();
+            case AUCTION -> auctionControls();
+            case EXTRACTOR -> extractorControls();
         }
+    }
 
-        systemButton = this.addRenderableWidget(Button.builder(systemButtonTitle(), button -> {
-            systemDraft.activeSystem = "auction".equals(systemDraft.activeSystem) ? "price_extractor" : "auction";
-            button.setMessage(systemButtonTitle());
-        }).bounds(left, top, columnWidth, 22).build());
+    private void homeControls() {
+        modeCard("easylife.module.auction", systems.auctionEnabled, top + 106, true);
+        modeCard("easylife.module.price_extractor", systems.priceExtractorEnabled, top + 201, false);
 
-        autoUpdateButton = this.addRenderableWidget(Button.builder(updateButtonTitle(), button -> {
-            draft.autoUpdate = !draft.autoUpdate;
-            button.setMessage(updateButtonTitle());
-        }).bounds(left + columnStep, top, columnWidth, 22).build());
+        button("easylife.settings.keybinds", left + 10, top + 306, halfWidth - 10, 23,
+            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
+        button("easylife.settings.updates", left + halfWidth + gap, top + 306, halfWidth - 10, 23,
+            () -> {
+                auction.autoUpdate = !auction.autoUpdate;
+                EasyLifeConfig.save(auction);
+                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
+            });
+        button("easylife.settings.close", left + (contentWidth - 164) / 2, top + 338, 164, 22, this::onClose);
+    }
 
-        this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.check_updates"), button -> {
-            EasyLifeUpdater.checkForUpdates(true);
-        }).bounds(left + columnStep, top + 187, columnWidth, 22).build());
+    private void modeCard(String label, boolean enabled, int y, boolean isAuction) {
+        int rowY = y + 34;
+        addRenderableWidget(Button.builder(Component.translatable(enabled
+                ? "easylife.mode.disable" : "easylife.mode.enable"), btn -> {
+            EasyLifeSystemConfig next = EasyLifeSystemConfig.get().copy();
+            if (isAuction) next.auctionEnabled = !next.auctionEnabled;
+            else next.priceExtractorEnabled = !next.priceExtractorEnabled;
+            EasyLifeSystemConfig.save(next);
+            minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
+        }).bounds(left + 14, rowY, halfWidth - 12, 22).build());
+        addRenderableWidget(Button.builder(Component.translatable("easylife.mode.settings"), btn ->
+            minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent,
+                isAuction ? Page.AUCTION : Page.EXTRACTOR))
+        ).bounds(left + halfWidth + gap, rowY, halfWidth - 12, 22).build());
+    }
 
-        delayField = new EditBox(this.font, left, top + 234, columnWidth, 20,
+    private void auctionControls() {
+        String[] values = auction.formValues();
+        for (int i = 0; i < fields.length; i++) {
+            int x = left + 8 + (i % 2) * (halfWidth + gap);
+            int y = top + 117 + (i / 2) * 42;
+            EditBox edit = new EditBox(font, x, y + 14, halfWidth - 16, 19,
+                Component.translatable(AUCTION_FIELDS[i]));
+            edit.setMaxLength(i == 5 ? 32 : 18);
+            edit.setValue(values[i]);
+            fields[i] = addRenderableWidget(edit);
+        }
+        delay = new EditBox(font, left + 8, top + 259, halfWidth - 16, 20,
             Component.translatable("easylife.setting.delay"));
-        delayField.setMaxLength(3);
-        delayField.setValue(Integer.toString(draft.betweenListingsTicks));
-        this.addRenderableWidget(delayField);
+        delay.setMaxLength(3);
+        delay.setValue(Integer.toString(auction.betweenListingsTicks));
+        addRenderableWidget(delay);
 
-        extractorPortField = new EditBox(this.font, left + columnStep, top + 234, columnWidth, 20,
+        button("easylife.settings.keybinds", left + halfWidth + gap, top + 259,
+            halfWidth - 16, 20,
+            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
+        saveButtons(this::saveAuction);
+    }
+
+    private void extractorControls() {
+        port = new EditBox(font, left + 8, top + 168, halfWidth - 16, 21,
             Component.translatable("easylife.extractor.port"));
-        extractorPortField.setMaxLength(5);
-        extractorPortField.setValue(Integer.toString(systemDraft.extractorPort));
-        this.addRenderableWidget(extractorPortField);
+        port.setMaxLength(5);
+        port.setValue(Integer.toString(systems.extractorPort));
+        addRenderableWidget(port);
 
-        this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.save"), button -> saveAndClose())
-            .bounds(left, top + 314, columnWidth, 24).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("easylife.settings.cancel"), button -> onClose())
-            .bounds(left + columnStep, top + 314, columnWidth, 24).build());
+        button(systems.extractorNotifications
+                ? "easylife.notify.on" : "easylife.notify.off",
+            left + halfWidth + gap, top + 168, halfWidth - 16, 21,
+            () -> {
+                systems.extractorNotifications = !systems.extractorNotifications;
+                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent, Page.EXTRACTOR));
+                EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
+                cfg.extractorNotifications = systems.extractorNotifications;
+                EasyLifeSystemConfig.save(cfg);
+            });
+
+        button("easylife.extractor.open_web", left + 8, top + 244, halfWidth - 16, 23,
+            this::openLocalWebsite);
+        button("easylife.extractor.clear", left + halfWidth + gap, top + 244, halfWidth - 16, 23,
+            PriceExtractorModule::clearItems);
+        button("easylife.settings.keybinds", left + 8, top + 281, halfWidth - 16, 21,
+            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
+        saveButtons(this::saveExtractor);
     }
 
-    private Component systemButtonTitle() {
-        return Component.translatable("easylife.setting.module",
-            Component.translatable("auction".equals(systemDraft.activeSystem)
-                ? "easylife.module.auction" : "easylife.module.price_extractor"));
+    private void saveButtons(Runnable saveAction) {
+        button("easylife.settings.save", left + 8, top + 329, halfWidth - 16, 24, saveAction);
+        button("easylife.settings.cancel", left + halfWidth + gap, top + 329, halfWidth - 16,
+            24, this::onClose);
     }
 
-    private Component updateButtonTitle() {
-        return Component.translatable("easylife.setting.auto_update", Component.translatable(
-            draft.autoUpdate ? "easylife.state.on" : "easylife.state.off"));
-    }
-
-    private void saveAndClose() {
+    private void saveAuction() {
         try {
-            draft.startingPrice = auctionFields[0].getValue().trim();
-            draft.minimumIncrement = auctionFields[1].getValue().trim();
-            draft.buyoutPrice = auctionFields[2].getValue().trim();
-            draft.durationSeconds = auctionFields[3].getValue().trim();
-            draft.overtimeSeconds = auctionFields[4].getValue().trim();
-            draft.startTime = auctionFields[5].getValue().trim();
-            draft.betweenListingsTicks = Integer.parseInt(delayField.getValue().trim());
-            systemDraft.extractorPort = Integer.parseInt(extractorPortField.getValue().trim());
-            EasyLifeConfig.save(draft);
-            EasyLifeSystemConfig.save(systemDraft);
-            if (draft.autoUpdate) EasyLifeUpdater.checkForUpdates(false);
+            auction.startingPrice = fields[0].getValue().trim();
+            auction.minimumIncrement = fields[1].getValue().trim();
+            auction.buyoutPrice = fields[2].getValue().trim();
+            auction.durationSeconds = fields[3].getValue().trim();
+            auction.overtimeSeconds = fields[4].getValue().trim();
+            auction.startTime = fields[5].getValue().trim();
+            auction.betweenListingsTicks = Integer.parseInt(delay.getValue().trim());
+            EasyLifeConfig.save(auction);
             onClose();
-        } catch (RuntimeException ex) {
-            warning = Component.translatable("easylife.settings.invalid", ex.getMessage());
+        } catch (RuntimeException e) {
+            error = Component.literal("ข้อมูลไม่ถูกต้อง: " + e.getMessage());
         }
+    }
+
+    private void saveExtractor() {
+        try {
+            systems.extractorPort = Integer.parseInt(port.getValue().trim());
+            EasyLifeSystemConfig.save(systems);
+            onClose();
+        } catch (RuntimeException e) {
+            error = Component.literal("ข้อมูลไม่ถูกต้อง: " + e.getMessage());
+        }
+    }
+
+    private void openLocalWebsite() {
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().browse(URI.create("http://127.0.0.1:" + systems.extractorPort));
+            }
+        } catch (Exception e) {
+            error = Component.literal("ไม่สามารถเปิดเบราว์เซอร์ได้");
+        }
+    }
+
+    private void button(String key, int x, int y, int w, int h, Runnable action) {
+        addRenderableWidget(Button.builder(Component.translatable(key), b -> action.run())
+            .bounds(x, y, Math.max(80, w), h).build());
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        // Siamcraft gold-on-charcoal settings panel.
-        int x0 = left - 14;
-        int x1 = left + 2 * columnWidth + 30;
-        int y0 = top - 18;
-        int y1 = top + 359;
-        graphics.fill(x0, y0, x1, y1, 0xE51B171C);
-        graphics.outline(x0, y0, x1 - x0, y1 - y0, 0xFFFFA63E);
-        graphics.fillGradient(x0 + 1, y0 + 1, x1 - 1, y0 + 5, 0xFFFFD67E, 0xFFE67F22);
-        graphics.fill(x0 + 1, y1 - 29, x1 - 1, y1 - 28, 0x88F1A34F);
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
-        int titleY = Math.max(8, top - 13);
-        graphics.centeredText(this.font, this.title, this.width / 2, titleY, 0xFFFFB342);
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+        // No header text; only the user-supplied Siamcraft logo.
+        g.fill(left - 12, top - 8, left + contentWidth + 12, top + 369, 0xEB17171E);
+        g.outline(left - 12, top - 8, contentWidth + 24, 377, 0xFFFFA33D);
+        g.fillGradient(left - 11, top - 7, left + contentWidth + 11, top - 3,
+            0xFFFFD772, 0xFFE17C27);
+        g.blit(LOGO, width / 2 - 62, top + 4, width / 2 + 62, top + 78,
+            0.0F, 1.0F, 0.0F, 1.0F);
 
-        for (int i = 0; i < auctionFields.length; i++) {
-            int x = left + (i % 2) * columnStep;
-            int y = top + 30 + (i / 2) * 46;
-            graphics.text(this.font, Component.translatable(LABEL_KEYS[i]), x, y + 2, 0xFFEAEAEA);
+        // Main content is deliberately below the logo-only header.
+        if (page == Page.HOME) {
+            card(g, top + 106, systems.auctionEnabled);
+            card(g, top + 201, systems.priceExtractorEnabled);
+        } else {
+            card(g, top + 101, page == Page.AUCTION
+                ? systems.auctionEnabled : systems.priceExtractorEnabled);
         }
-        graphics.text(this.font, Component.translatable("easylife.setting.delay"), left, top + 218, 0xFFEAEAEA);
-        graphics.text(this.font, Component.translatable("easylife.extractor.port"), left + columnStep,
-            top + 218, 0xFFEAEAEA);
-        String version = FabricLoader.getInstance().getModContainer("scautoauction")
-            .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("?");
-        graphics.text(this.font, Component.translatable("easylife.settings.version", version),
-            left, top + 263, 0xFFAAAAAA);
-        graphics.text(this.font, Component.translatable("easylife.extractor.hint", "http://127.0.0.1:" + systemDraft.extractorPort),
-            left + columnStep, top + 263, 0xFFB8C3D2);
-        graphics.text(this.font, EasyLifeUpdater.getStatusText(), left, top + 289, 0xFFF5CE74);
-        if (!warning.getString().isEmpty()) {
-            graphics.centeredText(this.font, warning, this.width / 2, top + 301, 0xFFFF6666);
+        super.extractRenderState(g, mouseX, mouseY, delta);
+
+        if (page == Page.HOME) {
+            label(g, "easylife.module.auction", left + 16, top + 116, GOLD);
+            label(g, systems.auctionEnabled ? "easylife.status.running" : "easylife.status.stopped",
+                left + contentWidth - 78, top + 116, systems.auctionEnabled ? 0xFF6AE7A2 : 0xFFAAAAAA);
+            label(g, "easylife.auction.short", left + 16, top + 136, 0xFFCCCFD5);
+
+            label(g, "easylife.module.price_extractor", left + 16, top + 211, GOLD);
+            label(g, systems.priceExtractorEnabled ? "easylife.status.running" : "easylife.status.stopped",
+                left + contentWidth - 78, top + 211, systems.priceExtractorEnabled ? 0xFF6AE7A2 : 0xFFAAAAAA);
+            label(g, "easylife.extractor.short", left + 16, top + 231, 0xFFCCCFD5);
+            label(g, "easylife.extractor.found",
+                left + 16, top + 263, 0xFFFFD48C, PriceExtractorModule.getFoundCount());
+        } else if (page == Page.AUCTION) {
+            label(g, "easylife.auction.settings", left + 15, top + 105, GOLD);
+            for (int i = 0; i < fields.length; i++) {
+                int x = left + 8 + (i % 2) * (halfWidth + gap);
+                int y = top + 117 + (i / 2) * 42;
+                label(g, AUCTION_FIELDS[i], x, y, TEXT);
+            }
+            label(g, "easylife.setting.delay", left + 8, top + 247, TEXT);
+            label(g, "easylife.auction.keyhelp", left + 8, top + 292, 0xFFB7BBC2);
+        } else {
+            label(g, "easylife.extractor.settings", left + 15, top + 109, GOLD);
+            label(g, "easylife.extractor.found", left + 15, top + 132, 0xFF6AE7A2,
+                PriceExtractorModule.getFoundCount());
+            String last = PriceExtractorModule.getLastFoundName();
+            if (last.length() > 46) last = last.substring(0, 43) + "...";
+            g.text(font, Component.literal(last), left + 15, top + 145, TEXT);
+            label(g, "easylife.extractor.port", left + 8, top + 156, TEXT);
+            label(g, "easylife.extractor.hint", left + 8, top + 218, 0xFFB7BBC2,
+                "http://127.0.0.1:" + systems.extractorPort);
+            String status = PriceExtractorModule.getStatus();
+            if (!status.isBlank()) g.text(font, Component.literal(status), left + 8, top + 312, 0xFFFF8B8B);
         }
+        if (!error.getString().isEmpty()) {
+            g.centeredText(font, error, width / 2, top + 357, 0xFFFF7171);
+        }
+    }
+
+    private void card(GuiGraphicsExtractor g, int y, boolean enabled) {
+        g.fill(left + 5, y, left + contentWidth - 5, y + (page == Page.HOME ? 85 : 213),
+            enabled ? 0xF0242927 : 0xF0222229);
+        g.outline(left + 5, y, contentWidth - 10, page == Page.HOME ? 85 : 213,
+            enabled ? 0xFF587C58 : 0xFF55515B);
+    }
+
+    private void label(GuiGraphicsExtractor g, String key, int x, int y, int color, Object... args) {
+        g.text(font, Component.translatable(key, args), x, y, color);
     }
 
     @Override
     public void onClose() {
-        this.minecraft.gui.setScreen(parent);
+        if (page == Page.HOME) minecraft.gui.setScreen(parent);
+        else minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
     }
 }
