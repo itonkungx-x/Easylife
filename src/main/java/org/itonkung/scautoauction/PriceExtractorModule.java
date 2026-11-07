@@ -395,10 +395,13 @@ public final class PriceExtractorModule implements AutomationModule {
         EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get();
         if (!cfg.priceExtractorEnabled || "auto".equals(cfg.priceScanMode)) return;
         Minecraft mc = Minecraft.getInstance();
+        // The older ItemPriceExtractor captured rendered tooltips without
+        // requiring an exact /worth title. Keep that behavior: custom shop GUIs
+        // may decorate/translate the title, while the price label is definitive.
         if (mc == null || mc.gui == null
-            || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
-            || !isWorthTitle(screen.getTitle().getString())) return;
+            || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) return;
         observedTooltipCalls++;
+        lastDetectedTitle = screen.getTitle().getString();
         List<String> raw = new ArrayList<>();
         for (Component line : lines) raw.add(line.getString());
         lastTooltipLines = Math.max(lastTooltipLines, raw.size());
@@ -419,8 +422,12 @@ public final class PriceExtractorModule implements AutomationModule {
                 ENTRIES.put(key, newItem);
                 lastJson = JSON.toJson(newItem);
                 lastItem = name + " = " + newItem.price;
-                if (cfg.extractorNotifications) say(mc, "Hover พบ " + name
-                    + " • ราคา " + newItem.price + " • รวม " + ENTRIES.size() + " รายการ");
+                if (cfg.extractorNotifications) {
+                    say(mc, "Hover พบ " + name + " • ราคา " + newItem.price
+                        + " • รวม " + ENTRIES.size() + " รายการ");
+                    PriceToast.show(name + " • ราคา " + newItem.price
+                        + " • รวม " + ENTRIES.size() + " รายการ");
+                }
             }
             itemCount = ENTRIES.size();
         }

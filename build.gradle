@@ -45,6 +45,12 @@ tasks.register('testPriceParser', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'org.itonkung.scautoauction.PriceTextParserTest'
 }
+tasks.register('testLegacyParser', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'org.itonkung.scautoauction.LegacyUnitPriceParserTest'
+}
 tasks.named('check') {
     dependsOn tasks.named('testPriceParser')
+    dependsOn tasks.named('testLegacyParser')
 }

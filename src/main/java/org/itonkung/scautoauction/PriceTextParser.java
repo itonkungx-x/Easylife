@@ -36,6 +36,9 @@ public final class PriceTextParser {
                 stack = number;
             }
         }
+        // Fallback: preserve the strict, tested unit-price regex from the
+        // archived ItemPriceExtractor 1.2 for legacy shop tooltip variants.
+        if (item.isEmpty()) item = LegacyUnitPriceParser.extract(lines);
         return new Prices(item, stack);
     }
 
