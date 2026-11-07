@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.7.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.8.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -114,3 +114,16 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - CI เพิ่ม PriceTextParserTest ที่ทดสอบรูปแบบราคาไทย/อังกฤษและไม่อ่านตัวเลขอื่นเป็นราคา
 - ต้องอัปเกรด JAR รุ่นก่อนเป็น **0.2.7** (Minecraft 26.3 Java 25 Fabric) และเอารุ่นเก่าออกจาก mods เพื่อเลี่ยง mod ID ซ้ำ
 - **การทดสอบจริง:** การคอมไพล์ CI และ parser ผ่านแล้ว แต่ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ Siamcraft เพื่อยืนยันการดึง Tooltip ที่สร้างโดยเซิร์ฟเวอร์ได้ในสภาพแวดล้อมนี้
+
+ 
+## v0.2.8 — Price Scan diagnostic fix (Minecraft 26.3)
+
+- **เปลี่ยน F7 ในหน้า /worth เป็นปุ่มเปิด/เช็กสถานะ:** หากเปิดจาก Mod Menu แล้ว F7 จะไม่ปิดระบบโดยไม่ตั้งใจ (หากต้องการปิด ให้ใช้ปุ่มปิดใน Mod Menu หรือกด F7 นอกหน้า /worth)
+- **Captured Tooltip:** สแกนจาก Item Lore, ข้อความ Tooltip ของ Container และใช้ Fabric ItemTooltipCallback ร่วมกับ Mixin แบบ read-only เพื่อจับข้อความที่เกมแสดงจริงตอนเอาเมาส์ชี้
+- ยังคงสแกนไอเท็มในหน้าที่เปิดอัตโนมัติ; ถ้าราคามีเฉพาะ Tooltip ตอน Hover จะดึงเมื่อ Hover ได้ด้วย
+- ตรวจสอบกรณีเมนูแบบ Custom มีช่องน้อยกว่า 36 (เดิมจะสรุปว่ามี 0 ช่อง)
+- เมื่อเจอเมนู /worth จะมีข้อความในแชตและสถานะแสดงใน Mod Menu (จำนวนช่อง, ราคาที่พบ, จำนวนครั้งที่จับ Tooltip)
+- ถ้าสแกน 5 รอบแล้วยังไม่มีราคา จะบันทึกไฟล์ **`config/easylife-price-diagnostic.json`** อัตโนมัติ พร้อมตัวอย่างไอเท็มสูงสุด 8 ชิ้นและ Tooltip สูงสุด 16 บรรทัด/ชิ้น (ไม่มี IP, username, chat)
+- วิธีส่งข้อมูลแก้บั๊ก: เปิด /worth ค้างไว้สักครู่ แล้วส่งไฟล์ easylife-price-diagnostic.json พร้อมส่วนที่มีคำว่า [Easylife] ใน logs/latest.log เพื่อให้ตรวจรูปแบบราคาที่ส่งมาได้ตรงกับของจริง
+- Web Dashboard ยังคงเป็น localhost ที่ http://127.0.0.1:8787 ไม่ส่งออกภายนอก
+- Compiler, Fabric Loader linkage, and installer smoke tests run in GitHub Actions. **No live connection to Siamcraft server available in CI** — real tooltip compatibility must be verified on the user's client.
