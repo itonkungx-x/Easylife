@@ -5,6 +5,8 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -83,19 +85,24 @@ public final class PriceExtractorModule implements AutomationModule {
     }
 
     @Override public String id() { return "price_extractor"; }
-    @Override public void initialize() { }
+    @Override public void initialize() {
+        // KeyMapping.consumeClick() is normally not populated while a screen is open.
+        // Listen for the registered F7 (or remapped) key inside the /worth container.
+        ScreenEvents.AFTER_INIT.register((client, current, w, h) -> {
+            if (!(current instanceof AbstractContainerScreen<?>)) return;
+            if (!current.getTitle().getString().toLowerCase(Locale.ROOT).contains("worth")) return;
+            ScreenKeyboardEvents.allowKeyPress(current).register((scr, event) -> {
+                if (!TOGGLE.matches(event)) return true;
+                toggleEnabled(client);
+                return false; // handled: prevent container shortcut conflicts
+            });
+        });
+    }
     @Override public void stop(Minecraft mc) { stopServer(); }
 
     @Override
     public void tick(Minecraft mc) {
-        while (TOGGLE.consumeClick()) {
-            EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
-            cfg.priceExtractorEnabled = !cfg.priceExtractorEnabled;
-            EasyLifeSystemConfig.save(cfg);
-            say(mc, cfg.priceExtractorEnabled
-                ? "เปิดสแกนราคาแล้ว • เปิด /worth เพื่อเริ่ม"
-                : "ปิดสแกนราคาแล้ว");
-        }
+        while (TOGGLE.consumeClick()) toggleEnabled(mc);
         if (!EasyLifeSystemConfig.get().priceExtractorEnabled) {
             if (server != null) stopServer();
             statusTh = "ระบบปิดอยู่";
@@ -231,6 +238,15 @@ public final class PriceExtractorModule implements AutomationModule {
             }
         }
         return all;
+    }
+
+    private static void toggleEnabled(Minecraft mc) {
+        EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
+        cfg.priceExtractorEnabled = !cfg.priceExtractorEnabled;
+        EasyLifeSystemConfig.save(cfg);
+        say(mc, cfg.priceExtractorEnabled
+            ? "Price Extractor เปิดแล้ว • ระบบจะอ่านราคาใน /worth"
+            : "Price Extractor ปิดแล้ว • กด F7 อีกครั้งเพื่อเปิด");
     }
 
     private static void say(Minecraft mc, String line) {
