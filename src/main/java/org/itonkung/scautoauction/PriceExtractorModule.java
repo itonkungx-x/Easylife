@@ -41,6 +41,7 @@ public final class PriceExtractorModule implements AutomationModule {
     private static final int MAX_ITEMS = 2048;
     private static final Map<String, PriceEntry> ENTRIES = new LinkedHashMap<>();
     private static volatile String lastItem = "ยังไม่พบข้อมูล";
+    private static volatile String lastJson = "{}";
     private static volatile String lastError = "";
     private static volatile int itemCount;
 
@@ -56,6 +57,7 @@ public final class PriceExtractorModule implements AutomationModule {
         ENTRIES.clear();
         itemCount = 0;
         lastItem = "ยังไม่พบข้อมูล";
+        lastJson = "{}";
     }
 
     @Override public String id() { return "price_extractor"; }
@@ -95,8 +97,8 @@ public final class PriceExtractorModule implements AutomationModule {
                 String key = entry.itemId;
                 if (ENTRIES.size() >= MAX_ITEMS && !ENTRIES.containsKey(key)) continue;
                 PriceEntry old = ENTRIES.put(key, entry);
-                if (old == null) { added++; newest = entry.name + " • " + entry.price; }
-                else if (!old.price.equals(entry.price)) { updated++; newest = entry.name + " • " + entry.price; }
+                if (old == null) { added++; newest = entry.name + " • " + entry.price; lastJson = JSON.toJson(entry); }
+                else if (!old.price.equals(entry.price)) { updated++; newest = entry.name + " • " + entry.price; lastJson = JSON.toJson(entry); }
             }
             itemCount = ENTRIES.size();
             if (!newest.isBlank()) lastItem = newest;
@@ -149,7 +151,7 @@ public final class PriceExtractorModule implements AutomationModule {
             HttpServer http = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
             http.createContext("/", ex -> serve(ex, loadWebsite(), "text/html; charset=utf-8"));
             http.createContext("/items", ex -> serve(ex, itemsJson(), "application/json; charset=utf-8"));
-            http.createContext("/data", ex -> serve(ex, itemsJson(), "application/json; charset=utf-8"));
+            http.createContext("/data", ex -> serve(ex, lastJson, "application/json; charset=utf-8"));
             http.setExecutor(Executors.newSingleThreadExecutor(r -> {
                 Thread t = new Thread(r, "easylife-worth-web");
                 t.setDaemon(true);

@@ -51,5 +51,7 @@
   "easylife.extractor.open_web": "เปิดหน้าเว็บ",
   "easylife.extractor.clear": "ล้างข้อมูล",
   "easylife.notify.on": "แจ้งเตือน: เปิด",
-  "easylife.notify.off": "แจ้งเตือน: ปิด"
+  "easylife.notify.off": "แจ้งเตือน: ปิด",
+  "easylife.settings.updates_on": "อัปเดตเอง: เปิด",
+  "easylife.settings.updates_off": "อัปเดตเอง: ปิด"
 }

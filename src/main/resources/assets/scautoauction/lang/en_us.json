@@ -51,5 +51,7 @@
   "easylife.extractor.open_web": "Open website",
   "easylife.extractor.clear": "Clear data",
   "easylife.notify.on": "Notifications: ON",
-  "easylife.notify.off": "Notifications: OFF"
+  "easylife.notify.off": "Notifications: OFF",
+  "easylife.settings.updates_on": "Auto update: ON",
+  "easylife.settings.updates_off": "Auto update: OFF"
 }

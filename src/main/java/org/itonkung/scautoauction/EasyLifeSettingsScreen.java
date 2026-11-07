@@ -72,7 +72,8 @@ public final class EasyLifeSettingsScreen extends Screen {
 
         button("easylife.settings.keybinds", left + 10, top + 306, halfWidth - 10, 23,
             () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
-        button("easylife.settings.updates", left + halfWidth + gap, top + 306, halfWidth - 10, 23,
+        button(auction.autoUpdate ? "easylife.settings.updates_on" : "easylife.settings.updates_off",
+            left + halfWidth + gap, top + 306, halfWidth - 10, 23,
             () -> {
                 auction.autoUpdate = !auction.autoUpdate;
                 EasyLifeConfig.save(auction);
@@ -131,11 +132,10 @@ public final class EasyLifeSettingsScreen extends Screen {
                 ? "easylife.notify.on" : "easylife.notify.off",
             left + halfWidth + gap, top + 168, halfWidth - 16, 21,
             () -> {
-                systems.extractorNotifications = !systems.extractorNotifications;
-                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent, Page.EXTRACTOR));
                 EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
-                cfg.extractorNotifications = systems.extractorNotifications;
+                cfg.extractorNotifications = !cfg.extractorNotifications;
                 EasyLifeSystemConfig.save(cfg);
+                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent, Page.EXTRACTOR));
             });
 
         button("easylife.extractor.open_web", left + 8, top + 244, halfWidth - 16, 23,
