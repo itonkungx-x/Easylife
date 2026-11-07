@@ -10,6 +10,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -77,6 +78,7 @@ public final class PriceExtractorModule implements AutomationModule {
     private boolean tooltipLookupDone;
     private Field hoveredSlotField;
     private boolean hoveredSlotLookupDone;
+    private static long lastShortcutNanos;
 
     public static int getFoundCount() { return itemCount; }
     public static String getLastFoundName() { return lastItem; }
@@ -483,7 +485,24 @@ public final class PriceExtractorModule implements AutomationModule {
         }
     }
 
+    /** SDL key event fallback based on the user's ItemPriceExtractor 1.2.
+     * This ensures remapped shortcut keys can work even with a container open.
+     */
+    public static void onRawKeyPress(int action, KeyEvent event) {
+        if (action != 1 || event == null || !TOGGLE.matches(event)) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.gui == null
+            || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
+            || !isWorthTitle(screen.getTitle().getString())) return;
+        toggleEnabled(mc);
+    }
+
     private static void toggleEnabled(Minecraft mc) {
+        // One physical press can reach SDL, ScreenKeyboardEvents and KeyMapping.
+        // Debounce the overlapping dispatch paths.
+        long now = System.nanoTime();
+        if (now - lastShortcutNanos < 150_000_000L) return;
+        lastShortcutNanos = now;
         EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
         // In /worth, F7 means "start/check" rather than accidentally switching
         // off a scanner already enabled through the Mod Menu.

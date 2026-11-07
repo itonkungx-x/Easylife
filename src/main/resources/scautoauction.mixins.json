@@ -3,7 +3,8 @@
   "package": "org.itonkung.scautoauction.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "ContainerTooltipCaptureMixin"
+    "ContainerTooltipCaptureMixin",
+    "WorthKeyboardMixin"
   ],
   "injectors": {
     "defaultRequire": 0
