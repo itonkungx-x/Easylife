@@ -138,8 +138,16 @@ public final class PriceExtractorModule implements AutomationModule {
         if (++ticks % 12 != 0 || mc == null || mc.player == null || mc.gui == null) return;
         Screen current = mc.gui.screen();
         if (!(current instanceof AbstractContainerScreen<?> screen)) {
-            statusTh = "รอเปิดหน้า /worth";
-            statusEn = "Open /worth to scan prices";
+            // Keep the last scan's result visible in Mod Menu after closing /worth.
+            if (isWorthTitle(lastDetectedTitle)) {
+                statusTh = "ผล /worth ล่าสุด: ช่อง " + lastScanned
+                    + " • มีราคา " + lastPriceLines + " • รวม " + itemCount;
+                statusEn = "Last /worth: items " + lastScanned
+                    + ", priced " + lastPriceLines + ", saved " + itemCount;
+            } else {
+                statusTh = "รอเปิดหน้า /worth";
+                statusEn = "Open /worth to scan prices";
+            }
             emptyRounds = 0;
             return;
         }
