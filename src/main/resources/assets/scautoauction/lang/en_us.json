@@ -114,5 +114,10 @@
   "ui.setting.version": "Mod version",
   "ui.info.version": "Installed version",
   "ui.setting.update_status": "Update status",
-  "ui.info.update_status": "Restart game after download"
+  "ui.info.update_status": "Restart game after download",
+  "ui.setting.scanmode": "Price scanning mode",
+  "ui.info.scanmode": "Choose automatic, hover only, or both methods",
+  "ui.scanmode.auto": "Automatic",
+  "ui.scanmode.hover": "Hover only",
+  "ui.scanmode.both": "Both"
 }

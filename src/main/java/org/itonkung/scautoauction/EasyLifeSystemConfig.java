@@ -21,6 +21,8 @@ public final class EasyLifeSystemConfig {
     public boolean auctionEnabled = true;
     public boolean priceExtractorEnabled = false;
     public boolean extractorNotifications = true;
+    /** auto = inspect visible /worth listings; hover = capture only hovered item; both = both pipelines. */
+    public String priceScanMode = "both";
     public int extractorPort = 8787;
     /** Easylife-specific UI language. Independent of Minecraft client language. */
     public String uiLanguage = "th_th";
@@ -69,6 +71,7 @@ public final class EasyLifeSystemConfig {
         c.auctionEnabled = auctionEnabled;
         c.priceExtractorEnabled = priceExtractorEnabled;
         c.extractorNotifications = extractorNotifications;
+        c.priceScanMode = priceScanMode;
         c.extractorPort = extractorPort;
         c.uiLanguage = uiLanguage;
         c.activeSystem = activeSystem;
@@ -76,6 +79,7 @@ public final class EasyLifeSystemConfig {
     }
 
     public void validate() {
+        if (!"auto".equals(priceScanMode) && !"hover".equals(priceScanMode) && !"both".equals(priceScanMode)) priceScanMode = "both";
         if (!"en_us".equals(uiLanguage)) uiLanguage = "th_th";
         if (extractorPort < 1024 || extractorPort > 65535) {
             throw new IllegalArgumentException("พอร์ตเว็บต้องอยู่ระหว่าง 1024–65535");

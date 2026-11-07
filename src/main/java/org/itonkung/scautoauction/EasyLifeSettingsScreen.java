@@ -81,7 +81,7 @@ public final class EasyLifeSettingsScreen extends Screen {
         contentX = left + 22;
         searchY = 65;
         topY = 122;
-        rowHeight = Math.max(29, Math.min(39, (height - topY - 65) / 8));
+        rowHeight = Math.max(25, Math.min(39, (height - topY - 65) / 9));
         error = "";
 
         int tabsX = 145;
@@ -175,12 +175,25 @@ public final class EasyLifeSettingsScreen extends Screen {
                 systems.priceExtractorEnabled = !systems.priceExtractorEnabled;
                 selectTab(Page.PRICE);
             });
+        addButtonRow("ui.setting.scanmode", "ui.info.scanmode",
+            switch (systems.priceScanMode) {
+                case "auto" -> "ui.scanmode.auto";
+                case "hover" -> "ui.scanmode.hover";
+                default -> "ui.scanmode.both";
+            }, () -> {
+                systems.priceScanMode = switch (systems.priceScanMode) {
+                    case "auto" -> "hover";
+                    case "hover" -> "both";
+                    default -> "auto";
+                };
+                selectTab(Page.PRICE);
+            });
         addButtonRow("ui.setting.notifications", "ui.info.notifications",
             systems.extractorNotifications ? "ui.enabled" : "ui.disabled", () -> {
                 systems.extractorNotifications = !systems.extractorNotifications;
                 selectTab(Page.PRICE);
             });
-        portBox = new EditBox(font, controlX, topY + 2 * rowHeight,
+        portBox = new EditBox(font, controlX, topY + 3 * rowHeight,
             controlWidth, 20, EasyLifeText.of("easylife.extractor.port"));
         portBox.setMaxLength(5);
         portBox.setValue(Integer.toString(systems.extractorPort));

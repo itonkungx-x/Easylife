@@ -114,5 +114,10 @@
   "ui.setting.version": "เวอร์ชันมอด",
   "ui.info.version": "เวอร์ชันที่ใช้อยู่",
   "ui.setting.update_status": "สถานะการอัปเดต",
-  "ui.info.update_status": "หากดาวน์โหลดแล้ว ต้องปิดและเปิดเกมใหม่"
+  "ui.info.update_status": "หากดาวน์โหลดแล้ว ต้องปิดและเปิดเกมใหม่",
+  "ui.setting.scanmode": "วิธีสแกนราคา",
+  "ui.info.scanmode": "เลือกแบบอัตโนมัติ, Hover หรือใช้ทั้งคู่",
+  "ui.scanmode.auto": "อัตโนมัติ",
+  "ui.scanmode.hover": "Hover เท่านั้น",
+  "ui.scanmode.both": "ทั้งคู่ (Both)"
 }

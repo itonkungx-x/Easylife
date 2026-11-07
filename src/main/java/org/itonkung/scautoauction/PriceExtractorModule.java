@@ -135,7 +135,7 @@ public final class PriceExtractorModule implements AutomationModule {
             return;
         }
         ensureServer();
-        if (++ticks % 12 != 0 || mc == null || mc.player == null || mc.gui == null) return;
+        if (++ticks % 4 != 0 || mc == null || mc.player == null || mc.gui == null) return;
         Screen current = mc.gui.screen();
         if (!(current instanceof AbstractContainerScreen<?> screen)) {
             // Keep the last scan's result visible in Mod Menu after closing /worth.
@@ -159,6 +159,19 @@ public final class PriceExtractorModule implements AutomationModule {
             emptyRounds = 0;
             return;
         }
+
+        String scanMode = EasyLifeSystemConfig.get().priceScanMode;
+        if (!"auto".equals(scanMode)) scanHoveredSlot(mc, screen);
+
+        if ("hover".equals(scanMode)) {
+            statusTh = "Hover เท่านั้น • จับได้ " + observedTooltipCalls
+                + " ครั้ง • ราคา " + observedTooltipPrices + " • สะสม " + itemCount;
+            statusEn = "Hover only • Tooltips " + observedTooltipCalls
+                + " • Priced " + observedTooltipPrices + " • Saved " + itemCount;
+            return;
+        }
+        // Automatic scanning every 12 ticks, hover sampling every 4 ticks.
+        if (ticks % 12 != 0) return;
 
         // Some custom inventory screens expose a different container than
         // the player's active server menu. Compare both before declaring 0 slots.
@@ -264,6 +277,29 @@ public final class PriceExtractorModule implements AutomationModule {
         }
     }
 
+    /**
+     * Active hover fallback: the actual slot beneath the cursor can be inspected
+     * even when a modded tooltip renderer does not dispatch Fabric tooltip events.
+     */
+    private void scanHoveredSlot(Minecraft mc, AbstractContainerScreen<?> screen) {
+        try {
+            Slot hovered = screen.getHoveredSlot();
+            if (hovered == null || hovered.getItem().isEmpty()) return;
+            List<Slot> slots = screen.getMenu().slots;
+            int index = slots.indexOf(hovered);
+            int listingSlots = slots.size() > 36 ? slots.size() - 36 : slots.size();
+            if (index < 0 || index >= listingSlots) return;
+            List<String> lines = itemTooltip(mc, screen, hovered.getItem());
+            if (!lines.isEmpty()) {
+                List<Component> text = lines.stream().map(Component::literal)
+                    .map(component -> (Component) component).toList();
+                observeRenderedTooltip(hovered.getItem(), text);
+            }
+        } catch (RuntimeException e) {
+            if (lastError.isBlank()) lastError = "Hover scanner: " + e.getClass().getSimpleName();
+        }
+    }
+
     private List<String> itemTooltip(Minecraft mc, AbstractContainerScreen<?> screen, ItemStack stack) {
         List<String> all = new ArrayList<>();
         // Primary source: actual on-screen tooltip including client-added lines.
@@ -329,7 +365,8 @@ public final class PriceExtractorModule implements AutomationModule {
     /** Receives the tooltip Minecraft actually displays to the player at hover time. */
     public static void observeRenderedTooltip(ItemStack stack, List<Component> lines) {
         if (stack == null || stack.isEmpty() || lines == null || lines.isEmpty()) return;
-        if (!EasyLifeSystemConfig.get().priceExtractorEnabled) return;
+        EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get();
+        if (!cfg.priceExtractorEnabled || "auto".equals(cfg.priceScanMode)) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.gui == null
             || !(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
@@ -349,11 +386,14 @@ public final class PriceExtractorModule implements AutomationModule {
             PriceEntry newItem = new PriceEntry(id, name,
                 parsed.perItem(), parsed.perStack(), Instant.now().toString());
             PriceEntry old = ENTRIES.get(key);
-            if (old == null || !old.price.equals(newItem.price)
-                || !old.perStack.equals(newItem.perStack)) {
+            boolean changedPrice = old == null || !old.price.equals(newItem.price)
+                || !old.perStack.equals(newItem.perStack);
+            if (changedPrice) {
                 ENTRIES.put(key, newItem);
                 lastJson = JSON.toJson(newItem);
                 lastItem = name + " = " + newItem.price;
+                if (cfg.extractorNotifications) say(mc, "Hover พบ " + name
+                    + " • ราคา " + newItem.price + " • รวม " + ENTRIES.size() + " รายการ");
             }
             itemCount = ENTRIES.size();
         }
