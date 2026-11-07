@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.8.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.9.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -127,3 +127,14 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - วิธีส่งข้อมูลแก้บั๊ก: เปิด /worth ค้างไว้สักครู่ แล้วส่งไฟล์ easylife-price-diagnostic.json พร้อมส่วนที่มีคำว่า [Easylife] ใน logs/latest.log เพื่อให้ตรวจรูปแบบราคาที่ส่งมาได้ตรงกับของจริง
 - Web Dashboard ยังคงเป็น localhost ที่ http://127.0.0.1:8787 ไม่ส่งออกภายนอก
 - Compiler, Fabric Loader linkage, and installer smoke tests run in GitHub Actions. **No live connection to Siamcraft server available in CI** — real tooltip compatibility must be verified on the user's client.
+
+ 
+## v0.2.9 — /worth inventory slot diagnostics and scan source fallback
+- Minecraft 26.3 Fabric Java 25, replaces v0.2.8.
+- Compared both `AbstractContainerScreen.getMenu().slots` and the active `Minecraft.player.containerMenu.slots`; uses the menu with visible item listings when their container IDs agree.
+- When `/worth` opens, chat reports both GUI slot count and active-player slot count. This helps diagnose menu desynchronization.
+- Fixed the silent `Slots 0` case: after 3 scans without sale slots, writes `config/easylife-price-diagnostic.json` with slot counts and menu source, even if no item is visible to the scanner.
+- Preserves last scan result after closing the menu; Price Scan settings now display concise `GUI … | Inv … | Item … | Price … | Hover …` counters without truncation.
+- Still reads actual tooltips and server-provided lore (v0.2.8) and will never synthesize prices when data cannot be read.
+- Important: the attached latest.log ended before the provided Settings screenshot. Do not interpret missing subsequent scan log lines as proof the scan never ran.
+- Development status: compiled and smoke-tested with Fabric Loom via CI; not validated on a live Siamcraft /worth screen. If still reporting zero, inspect the newly generated diagnostic JSON.
