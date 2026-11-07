@@ -17,6 +17,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ItemLore;
 
@@ -64,6 +65,11 @@ public final class PriceExtractorModule implements AutomationModule {
     private HttpServer server;
     private int serverPort = -1;
     private int ticks, emptyRounds, lastMenuId = Integer.MIN_VALUE;
+    private int missingSlotsRounds;
+    private int lastReportedMenuId = Integer.MIN_VALUE;
+    private volatile boolean diagnosticSavedForMenu;
+    private static volatile String selectedMenuSource = "-";
+    private static volatile int screenMenuSize, playerMenuSize;
     private String screenTitle = "";
     private boolean warnedNoPrice;
     private Method containerTooltipMethod;
@@ -77,7 +83,9 @@ public final class PriceExtractorModule implements AutomationModule {
         return lastError.isBlank() ? status : lastError;
     }
     public static String getDiagnostics() {
-        return "Title: " + lastDetectedTitle + " | Slots " + lastScanned
+        return "Title: " + lastDetectedTitle + " | GUI " + screenMenuSize
+            + " | Player " + playerMenuSize + " | Source " + selectedMenuSource
+            + " | Slots " + lastScanned
             + " | Priced " + lastPriceLines + " | Hover " + observedTooltipCalls
             + "/" + observedTooltipPrices + " | Tooltip lines " + lastTooltipLines
             + " | Saved " + itemCount;
@@ -90,6 +98,9 @@ public final class PriceExtractorModule implements AutomationModule {
         lastJson = "{}";
         lastPriceLines = 0;
         lastScanned = 0;
+        screenMenuSize = 0;
+        playerMenuSize = 0;
+        selectedMenuSource = "-";
         observedTooltipCalls = 0;
         observedTooltipPrices = 0;
         lastTooltipLines = 0;
@@ -143,23 +154,48 @@ public final class PriceExtractorModule implements AutomationModule {
             return;
         }
 
-        List<Slot> slots = screen.getMenu().slots;
-        int menuId = screen.getMenu().containerId;
+        // Some custom inventory screens expose a different container than
+        // the player's active server menu. Compare both before declaring 0 slots.
+        AbstractContainerMenu screenMenu = screen.getMenu();
+        AbstractContainerMenu activeMenu = mc.player.containerMenu;
+        List<Slot> screenSlots = screenMenu.slots;
+        List<Slot> activeSlots = activeMenu == null ? List.of() : activeMenu.slots;
+        screenMenuSize = screenSlots.size();
+        playerMenuSize = activeSlots.size();
+        boolean useActive = screenSlots.isEmpty() && !activeSlots.isEmpty();
+        List<Slot> slots = useActive ? activeSlots : screenSlots;
+        selectedMenuSource = useActive ? "player.containerMenu" : "screen.getMenu()";
+        int menuId = screenMenu.containerId;
         if (menuId != lastMenuId || !title.equals(screenTitle)) {
             emptyRounds = 0;
             warnedNoPrice = false;
             lastMenuId = menuId;
             screenTitle = title;
-            say(mc, "พบหน้า " + title + " • กำลังอ่านราคาอัตโนมัติ");
+            diagnosticSavedForMenu = false;
+            missingSlotsRounds = 0;
+            say(mc, "ตรวจพบหน้า " + title + " • ช่อง GUI " + screenMenuSize
+                + " • ช่อง Player " + playerMenuSize + " • กำลังอ่านราคา");
         }
 
         // The last 36 slots represent player inventory in chest-like menus.
-        int topSlots = slots.size() > 36 ? slots.size() - 36 : slots.size();
+        // Most chest-like GUI menus reserve the last 36 slots for player inventory.
+        // If the menu only has 36 inventory slots, there are no visible sale listings.
+        int topSlots = slots.size() > 36 ? slots.size() - 36 : 0;
         if (topSlots == 0) {
-            statusTh = "พบ /worth แต่ไม่พบช่องรายการ";
-            statusEn = "/worth detected, no listing slots";
+            lastScanned = 0;
+            lastPriceLines = 0;
+            statusTh = "พบ /worth แต่ไม่พบช่องขาย (GUI " + screenMenuSize
+                + " / Player " + playerMenuSize + ")";
+            statusEn = "Worth menu detected, but no listing slots (GUI " + screenMenuSize
+                + ", player " + playerMenuSize + ")";
+            if (++missingSlotsRounds >= 3 && !diagnosticSavedForMenu) {
+                diagnosticSavedForMenu = true;
+                say(mc, "พบ /worth แต่ไม่พบรายการขาย • บันทึกไฟล์วิเคราะห์แล้ว");
+                saveDiagnostic(screen, slots, 0);
+            }
             return;
         }
+        missingSlotsRounds = 0;
 
         int added = 0, updated = 0, seen = 0, examined = 0, linesFound = 0;
         String newest = "";
@@ -205,6 +241,7 @@ public final class PriceExtractorModule implements AutomationModule {
         }
         if (seen > 0 && linesFound == 0 && ++emptyRounds >= 5 && !warnedNoPrice) {
             warnedNoPrice = true;
+            diagnosticSavedForMenu = true;
             say(mc, "พบ /worth " + seen + " ช่อง แต่ยังไม่พบราคาจาก Tooltip"
                 + " • ดูสถานะใน Easylife → สแกนราคา");
             System.err.println("[Easylife] /worth found " + seen
@@ -313,6 +350,9 @@ public final class PriceExtractorModule implements AutomationModule {
             debug.put("mod", "Easylife");
             debug.put("screenTitle", screen.getTitle().getString());
             debug.put("slotsTotal", slots.size());
+            debug.put("guiSlots", screenMenuSize);
+            debug.put("playerSlots", playerMenuSize);
+            debug.put("source", selectedMenuSource);
             debug.put("topSlots", topSlots);
             debug.put("visibleNonEmpty", lastScanned);
             debug.put("recognizedPriceEntries", lastPriceLines);
