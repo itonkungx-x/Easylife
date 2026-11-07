@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.9.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.10.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -138,3 +138,14 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - Still reads actual tooltips and server-provided lore (v0.2.8) and will never synthesize prices when data cannot be read.
 - Important: the attached latest.log ended before the provided Settings screenshot. Do not interpret missing subsequent scan log lines as proof the scan never ran.
 - Development status: compiled and smoke-tested with Fabric Loom via CI; not validated on a live Siamcraft /worth screen. If still reporting zero, inspect the newly generated diagnostic JSON.
+
+ 
+## v0.2.10 — วิธีสแกนราคา 3 แบบ (Minecraft 26.3 Fabric)
+
+- **Mod Menu → Easylife → สแกนราคา → วิธีสแกนราคา** มีปุ่มให้วนเลือกระหว่าง `อัตโนมัติ`, `Hover เท่านั้น`, และ `ทั้งคู่ (Both)`.
+- **อัตโนมัติ / Auto:** สแกนไอเท็มที่อยู่ในช่องรายการของหน้า `/worth` ทุก 12 tick โดยไม่ต้องเลื่อนเมาส์ โหมดนี้ไม่เก็บรายการจาก Hover events.
+- **Hover เท่านั้น:** ไม่สแกนทั้งหน้า; รับ ItemTooltipCallback และ Container Tooltip Mixin เมื่อมีการ Hover จริง พร้อมอ่านช่องที่เมาส์ชี้ผ่านฟิลด์ `hoveredSlot` เป็น fallback ทุก 4 tick.
+- **ทั้งคู่ / Both:** ใช้สองวิธีพร้อมกัน ยุบไอเท็มซ้ำตาม item ID + ชื่อไอเท็ม และอัปเดตราคาเมื่อมีการเปลี่ยนแปลง.
+- ค่าเริ่มต้น: **Both**. บันทึกค่าที่ `config/easylife-systems.json` เพื่อจำโหมดข้ามการเปิดเกม.
+- UI รองรับภาษาไทยเป็นค่าเริ่มต้นและภาษาอังกฤษ ตามการตั้งค่าเดิม.
+- **ข้อจำกัด:** หาก /worth ของเซิร์ฟเวอร์ไม่ส่งข้อมูลราคาที่มอดเข้าถึงได้ ก็ยังอาจสแกนไม่พบราคา; Build ผ่าน แต่ยังไม่ได้ทดสอบบน Siamcraft จริง. ถ้า Hover/Both ยัง 0 ให้ส่ง `config/easylife-price-diagnostic.json` และ `logs/latest.log` เพื่อระบุจุดที่ข้อมูลไม่ถูกส่งต่อ.

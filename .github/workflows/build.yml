@@ -25,6 +25,8 @@ jobs:
           JAR=$(find build/libs -maxdepth 1 -name 'Easylife-in-Siamcraft-26.3-*.jar' ! -name '*-sources.jar' | head -n 1)
           test -s "$JAR"
           jar tf "$JAR" | grep -Fq 'org/itonkung/scautoauction/PriceExtractorModule.class'
+          javap -p -classpath "$JAR" org.itonkung.scautoauction.EasyLifeSystemConfig | grep -Fq 'priceScanMode'
+          javap -p -classpath "$JAR" org.itonkung.scautoauction.PriceExtractorModule | grep -Fq 'scanHoveredSlot'
           jar tf "$JAR" | grep -Fq 'org/itonkung/scautoauction/mixin/ContainerTooltipCaptureMixin.class'
           jar tf "$JAR" | grep -Fq 'scautoauction.mixins.json'
           jar tf "$JAR" | grep -Fq 'org/itonkung/scautoauction/EasyLifeText.class'
