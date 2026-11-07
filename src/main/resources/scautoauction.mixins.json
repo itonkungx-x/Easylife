@@ -1,0 +1,11 @@
+{
+  "required": false,
+  "package": "org.itonkung.scautoauction.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ContainerTooltipCaptureMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
