@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.10.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.11.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -149,3 +149,22 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - ค่าเริ่มต้น: **Both**. บันทึกค่าที่ `config/easylife-systems.json` เพื่อจำโหมดข้ามการเปิดเกม.
 - UI รองรับภาษาไทยเป็นค่าเริ่มต้นและภาษาอังกฤษ ตามการตั้งค่าเดิม.
 - **ข้อจำกัด:** หาก /worth ของเซิร์ฟเวอร์ไม่ส่งข้อมูลราคาที่มอดเข้าถึงได้ ก็ยังอาจสแกนไม่พบราคา; Build ผ่าน แต่ยังไม่ได้ทดสอบบน Siamcraft จริง. ถ้า Hover/Both ยัง 0 ให้ส่ง `config/easylife-price-diagnostic.json` และ `logs/latest.log` เพื่อระบุจุดที่ข้อมูลไม่ถูกส่งต่อ.
+
+ 
+## v0.2.11 — Integrates archived ItemPriceExtractor v1.2.0 sources
+
+Source basis: user-provided `ItemPriceExtractor-26.3-Source-v1.2.0.zip`.
+The old code had these ideas relevant to a Hover scanner:
+1. Mixin hooks `AbstractContainerScreen.getTooltipFromContainerItem(ItemStack)` at `RETURN` to read final rendered tooltip text rather than only a slot's item lore.
+2. Strict Thai/English per-unit-price regex, avoiding a stack-price number or tooltip component count.
+3. `SystemToast` visible when a container GUI covers chat.
+4. SDL `KeyboardHandler.keyPress` hook that handles the scanner hotkey while a container GUI is open.
+
+Easylife now adapts all four ideas to the existing Price Extractor module. The SDL fallback is **only** used for the configured Price Scan shortcut inside /worth, and duplicate events are debounced. The existing Auto / Hover / Both selector is preserved.
+
+### Testing
+- Run `gradle --no-daemon clean build` with Java 25 and Fabric Loom. CI also tests `PriceTextParserTest` and `LegacyUnitPriceParserTest`.
+- Java compilation and bytecode linkage checks are not a substitute for actually opening /worth in Minecraft.
+- Manual test: Mod Menu → Easylife → Price Scan → Enable → **Hover only** → Save. Open /worth and hover Dragon Egg. The correct expected sample is **1,000,000 per item** and **64,000,000 per stack**.
+- If the user does not see the Toast/chat event, inspect `config/easylife-price-diagnostic.json` plus the Easylife lines in `logs/latest.log`; a Mixin may not run in custom container tooltips.
+- Do not package any stubs from the old source zip in the new mod. They were compilation scaffolds, not runtime classes.
