@@ -2,6 +2,8 @@ package org.itonkung.scautoauction;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -10,65 +12,69 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-/**
- * Separate settings for the selected Easylife workflow.
- * Auction settings remain in easylife-in-siamcraft.json.
- */
+/** Per-module state; older activeSystem configs are migrated once. */
 public final class EasyLifeSystemConfig {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path PATH = FabricLoader.getInstance().getConfigDir().resolve("easylife-systems.json");
-    private static EasyLifeSystemConfig current = new EasyLifeSystemConfig();
+    private static volatile EasyLifeSystemConfig current = new EasyLifeSystemConfig();
 
-    public String activeSystem = "auction";
+    public boolean auctionEnabled = true;
+    public boolean priceExtractorEnabled = false;
+    public boolean extractorNotifications = true;
     public int extractorPort = 8787;
+    /** Legacy single-mode selection retained for migration only. */
+    public String activeSystem = "auction";
 
-    public static synchronized EasyLifeSystemConfig get() {
-        return current;
-    }
+    public static EasyLifeSystemConfig get() { return current; }
 
     public static synchronized void load() {
         if (!Files.isRegularFile(PATH)) return;
         try {
-            EasyLifeSystemConfig loaded = JSON.fromJson(Files.readString(PATH, StandardCharsets.UTF_8), EasyLifeSystemConfig.class);
-            if (loaded != null) {
-                loaded.validate();
-                current = loaded;
+            String raw = Files.readString(PATH, StandardCharsets.UTF_8);
+            JsonObject data = JsonParser.parseString(raw).getAsJsonObject();
+            EasyLifeSystemConfig cfg = JSON.fromJson(data, EasyLifeSystemConfig.class);
+            if (cfg == null) return;
+            if (!data.has("auctionEnabled") && !data.has("priceExtractorEnabled")) {
+                cfg.priceExtractorEnabled = "price_extractor".equals(cfg.activeSystem);
+                cfg.auctionEnabled = !cfg.priceExtractorEnabled;
             }
-        } catch (IOException | RuntimeException error) {
-            System.err.println("[Easylife] Could not load system settings: " + error);
+            cfg.validate();
+            current = cfg;
+        } catch (Exception e) {
+            System.err.println("[Easylife] Unable to read settings: " + e);
         }
     }
 
-    public static synchronized void save(EasyLifeSystemConfig config) {
-        config.validate();
+    public static synchronized void save(EasyLifeSystemConfig cfg) {
+        cfg.validate();
         try {
             Files.createDirectories(PATH.getParent());
-            Path tmp = Files.createTempFile(PATH.getParent(), "easylife-system-", ".tmp");
+            Path temp = Files.createTempFile(PATH.getParent(), "easylife-systems-", ".json.tmp");
             try {
-                Files.writeString(tmp, JSON.toJson(config), StandardCharsets.UTF_8);
-                Files.move(tmp, PATH, StandardCopyOption.REPLACE_EXISTING);
-                current = config.copy();
+                Files.writeString(temp, JSON.toJson(cfg), StandardCharsets.UTF_8);
+                Files.move(temp, PATH, StandardCopyOption.REPLACE_EXISTING);
+                current = cfg.copy();
             } finally {
-                Files.deleteIfExists(tmp);
+                Files.deleteIfExists(temp);
             }
-        } catch (IOException error) {
-            throw new IllegalStateException("Cannot save systems configuration", error);
+        } catch (IOException e) {
+            throw new IllegalStateException("Cannot save systems configuration", e);
         }
     }
 
     public EasyLifeSystemConfig copy() {
-        EasyLifeSystemConfig copy = new EasyLifeSystemConfig();
-        copy.activeSystem = activeSystem;
-        copy.extractorPort = extractorPort;
-        return copy;
+        EasyLifeSystemConfig c = new EasyLifeSystemConfig();
+        c.auctionEnabled = auctionEnabled;
+        c.priceExtractorEnabled = priceExtractorEnabled;
+        c.extractorNotifications = extractorNotifications;
+        c.extractorPort = extractorPort;
+        c.activeSystem = activeSystem;
+        return c;
     }
 
     public void validate() {
-        if (!"auction".equals(activeSystem) && !"price_extractor".equals(activeSystem)) {
-            throw new IllegalArgumentException("Unknown system");
-        }
         if (extractorPort < 1024 || extractorPort > 65535) {
-            throw new IllegalArgumentException("Web port must be 1024-65535");
+            throw new IllegalArgumentException("พอร์ตเว็บต้องอยู่ระหว่าง 1024–65535");
         }
     }
 }

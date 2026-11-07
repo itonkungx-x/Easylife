@@ -66,7 +66,7 @@ public final class AuctionModule implements AutomationModule {
 
     @Override
     public void tick(Minecraft mc) {
-        if (!"auction".equals(EasyLifeSystemConfig.get().activeSystem)) {
+        if (!EasyLifeSystemConfig.get().auctionEnabled) {
             while (TOGGLE.consumeClick()) { }
             while (STOP.consumeClick()) { }
             if (phase != Phase.IDLE) halt(mc, "เปลี่ยนไปใช้ระบบอื่นแล้ว");
