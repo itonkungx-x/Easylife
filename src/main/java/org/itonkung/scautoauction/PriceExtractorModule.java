@@ -83,12 +83,10 @@ public final class PriceExtractorModule implements AutomationModule {
         return lastError.isBlank() ? status : lastError;
     }
     public static String getDiagnostics() {
-        return "Title: " + lastDetectedTitle + " | GUI " + screenMenuSize
-            + " | Player " + playerMenuSize + " | Source " + selectedMenuSource
-            + " | Slots " + lastScanned
-            + " | Priced " + lastPriceLines + " | Hover " + observedTooltipCalls
-            + "/" + observedTooltipPrices + " | Tooltip lines " + lastTooltipLines
-            + " | Saved " + itemCount;
+        // Compact: the Settings screen intentionally truncates strings > 62 chars.
+        return "GUI " + screenMenuSize + " | Inv " + playerMenuSize
+            + " | Item " + lastScanned + " | Price " + lastPriceLines
+            + " | Hover " + observedTooltipCalls + "/" + observedTooltipPrices;
     }
 
     public static synchronized void clearItems() {
