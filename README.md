@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.6.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.7.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -99,3 +99,18 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - ข้อมูลสแกนเก็บในหน่วยความจำขณะเกมเปิด ไม่อัปโหลดออกไปเซิร์ฟเวอร์ภายนอก
 - หากเซิร์ฟเวอร์ไม่ส่งราคาผ่าน item lore จะยังไม่แสดงราคา ไม่สร้างตัวเลขขึ้นเอง
 - Java 25 / Fabric Loader / updater ผ่าน CI แล้ว; ต้องทดสอบความถูกต้องกับปลั๊กอิน /worth ในเกมจริง
+
+## v0.2.7 — แก้สแกนราคา + Settings แนว ChatTools
+
+- **แก้สแกนไม่พบราคา**: เดิมอ่านเฉพาะ Item Lore; ใหม่ดึงข้อความ Tooltip ที่หน้า `/worth` แสดงจริง รวมถึงข้อมูลจากมอดฝั่ง Client และใช้ Lore เป็น Fallback
+- ตัวอ่านลองประมวลผลทุกรายการที่แสดงใน /worth โดยไม่ต้อง Hover; หากเซิร์ฟเวอร์หรือมอดอื่นแสดงราคาเฉพาะเมาส์ชี้จริง ๆ อาจยังต้องตรวจสอบข้อมูลเพิ่มเติม
+- **แก้ F7 ใน GUI** ผ่าน Fabric ScreenKeyboardEvents: กด F7 ในหน้า /worth ได้ และรองรับปุ่มที่เปลี่ยนผ่าน Key Binds
+- **F7 เป็น Toggle:** หากเปิดระบบไว้แล้ว F7 อีกครั้งคือปิด ไม่ใช่สั่งเริ่มใหม่; หน้า Settings แสดงสถานะชัดเจน
+- เพิ่มข้อความแชตแจ้งเปิด /worth, พบไอเท็มใหม่, พบช่องแต่ไม่พบราคา และสถานะรายละเอียดใน Settings
+- หน้า Settings ใหม่สไตล์ ChatTools: แถบ General / Auction / Price Scan / Keybinds / Updates, ช่องค้นหาที่กรองรายการได้ และ Save & Quit ด้านล่าง
+- **ส่วนหัวมีแค่โลโก้ Siamcraft** ไม่มีชื่อซ้ำ
+- ภาษาไทยเป็นค่าเริ่มต้น **ภายในมอดเอง** และสลับ English ได้จากแท็บ General → ภาษาของมอด โดยไม่ต้องเปลี่ยนภาษาทั้งเกม
+- ราคาดูที่ http://127.0.0.1:8787/ (ขณะเปิดสแกน); /items แสดงทั้งหมดที่เก็บ และ /data แสดงไอเท็มล่าสุด
+- CI เพิ่ม PriceTextParserTest ที่ทดสอบรูปแบบราคาไทย/อังกฤษและไม่อ่านตัวเลขอื่นเป็นราคา
+- ต้องอัปเกรด JAR รุ่นก่อนเป็น **0.2.7** (Minecraft 26.3 Java 25 Fabric) และเอารุ่นเก่าออกจาก mods เพื่อเลี่ยง mod ID ซ้ำ
+- **การทดสอบจริง:** การคอมไพล์ CI และ parser ผ่านแล้ว แต่ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ Siamcraft เพื่อยืนยันการดึง Tooltip ที่สร้างโดยเซิร์ฟเวอร์ได้ในสภาพแวดล้อมนี้
