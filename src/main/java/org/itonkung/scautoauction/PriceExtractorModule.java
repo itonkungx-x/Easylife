@@ -283,7 +283,7 @@ public final class PriceExtractorModule implements AutomationModule {
      */
     private void scanHoveredSlot(Minecraft mc, AbstractContainerScreen<?> screen) {
         try {
-            Slot hovered = screen.getHoveredSlot();
+            Slot hovered = screen.getSlotUnderMouse();
             if (hovered == null || hovered.getItem().isEmpty()) return;
             List<Slot> slots = screen.getMenu().slots;
             int index = slots.indexOf(hovered);
