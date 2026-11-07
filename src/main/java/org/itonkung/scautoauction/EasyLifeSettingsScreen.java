@@ -248,7 +248,7 @@ public final class EasyLifeSettingsScreen extends Screen {
                 + EasyLifeText.getIn("en_us", row.hintKey);
             boolean show = term.isEmpty() || label.toLowerCase(Locale.ROOT).contains(term);
             if (row.widget != null) {
-                row.widget.setVisible(show);
+                row.widget.visible = show;
                 if (show) row.widget.setY(topY + visible * rowHeight + 6);
             }
             if (show) visible++;
