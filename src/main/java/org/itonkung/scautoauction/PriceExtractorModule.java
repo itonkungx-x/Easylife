@@ -162,7 +162,12 @@ public final class PriceExtractorModule implements AutomationModule {
         List<Slot> activeSlots = activeMenu == null ? List.of() : activeMenu.slots;
         screenMenuSize = screenSlots.size();
         playerMenuSize = activeSlots.size();
-        boolean useActive = screenSlots.isEmpty() && !activeSlots.isEmpty();
+        int onScreen = filledListingSlots(screenSlots);
+        int inPlayerMenu = filledListingSlots(activeSlots);
+        boolean useActive = !activeSlots.isEmpty()
+            && (screenSlots.isEmpty()
+                || (activeMenu.containerId == screenMenu.containerId
+                    && inPlayerMenu > onScreen));
         List<Slot> slots = useActive ? activeSlots : screenSlots;
         selectedMenuSource = useActive ? "player.containerMenu" : "screen.getMenu()";
         int menuId = screenMenu.containerId;
@@ -296,6 +301,16 @@ public final class PriceExtractorModule implements AutomationModule {
         return all;
     }
 
+
+    private static int filledListingSlots(List<Slot> slots) {
+        if (slots == null || slots.size() <= 36) return 0;
+        int limit = slots.size() - 36;
+        int filled = 0;
+        for (int i = 0; i < limit; i++) {
+            if (!slots.get(i).getItem().isEmpty()) filled++;
+        }
+        return filled;
+    }
 
     private static boolean isWorthTitle(String title) {
         if (title == null) return false;
