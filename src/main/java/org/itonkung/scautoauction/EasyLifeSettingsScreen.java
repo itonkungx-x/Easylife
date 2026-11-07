@@ -2,6 +2,7 @@ package org.itonkung.scautoauction;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -11,40 +12,60 @@ import net.minecraft.resources.Identifier;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.Supplier;
 
 /**
- * Separate Auction and Price Extractor screens, with a Siamcraft-logo-only header.
- * Native Minecraft key bindings are configured via the game's KeyBindsScreen.
+ * Easylife settings UI with ChatTools-style tabs, search and fixed Save & Quit.
+ * Language is independent of the Minecraft language; Thai is the default.
  */
 public final class EasyLifeSettingsScreen extends Screen {
-    private enum Page { HOME, AUCTION, EXTRACTOR }
+    private enum Page { GENERAL, AUCTION, PRICE, HOTKEYS, UPDATE }
     private static final Identifier LOGO = Identifier.fromNamespaceAndPath(
         "scautoauction", "textures/gui/siamcraft_logo.png");
-    private static final int GOLD = 0xFFFFC266;
-    private static final int TEXT = 0xFFF2EEE8;
-
-    private final Screen parent;
-    private final Page page;
-    private EasyLifeConfig auction;
-    private EasyLifeSystemConfig systems;
-    private final EditBox[] fields = new EditBox[6];
-    private EditBox delay;
-    private EditBox port;
-    private Component error = Component.empty();
-    private int left, top, contentWidth, halfWidth, gap;
-
+    private static final String[] TABS = {
+        "ui.tab.general", "ui.tab.auction", "ui.tab.price", "ui.tab.hotkeys", "ui.tab.update"
+    };
     private static final String[] AUCTION_FIELDS = {
         "easylife.setting.starting_price", "easylife.setting.increment",
         "easylife.setting.buyout", "easylife.setting.duration",
         "easylife.setting.overtime", "easylife.setting.start_time"
     };
+    private static final int GOLD = 0xFFFFC36F;
+    private static final int TEXT = 0xFFE7E7E7;
+    private static final int MUTED = 0xFFABACB5;
 
-    public EasyLifeSettingsScreen(Screen parent) { this(parent, Page.HOME); }
+    private record Row(String labelKey, String hintKey, AbstractWidget widget,
+                       Supplier<String> dynamicValue) { }
 
-    private EasyLifeSettingsScreen(Screen parent, Page page) {
-        super(Component.translatable("easylife.settings.title"));
+    private final Screen parent;
+    private final Page initialPage;
+    private EasyLifeConfig auction;
+    private EasyLifeSystemConfig systems;
+    private Page page;
+    private final List<Row> rows = new ArrayList<>();
+    private final EditBox[] auctionFields = new EditBox[6];
+    private EditBox delayBox;
+    private EditBox portBox;
+    private EditBox search;
+    private String query = "";
+    private String error = "";
+    private int left, right, controlX, controlWidth, topY, rowHeight;
+    private int contentX;
+    private int searchY;
+
+    public EasyLifeSettingsScreen(Screen parent) {
+        this(parent, Page.GENERAL, "");
+    }
+
+    private EasyLifeSettingsScreen(Screen parent, Page initialPage, String searchQuery) {
+        super(Component.literal("Easylife"));
         this.parent = parent;
-        this.page = page;
+        this.initialPage = initialPage;
+        this.page = initialPage;
+        this.query = searchQuery;
         this.auction = EasyLifeConfig.get().copy();
         this.systems = EasyLifeSystemConfig.get().copy();
     }
@@ -52,221 +73,292 @@ public final class EasyLifeSettingsScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        contentWidth = Math.min(444, Math.max(244, width - 32));
-        left = (width - contentWidth) / 2;
-        top = Math.max(6, (height - 372) / 2);
-        gap = 14;
-        halfWidth = (contentWidth - gap) / 2;
-        error = Component.empty();
+        rows.clear();
+        left = 22;
+        right = width - 22;
+        controlWidth = Math.min(235, Math.max(135, (right - left) / 3));
+        controlX = right - controlWidth - 8;
+        contentX = left + 22;
+        searchY = 65;
+        topY = 122;
+        rowHeight = Math.max(29, Math.min(39, (height - topY - 65) / 8));
+        error = "";
+
+        int tabsX = 145;
+        int tabSpace = Math.max(0, right - tabsX);
+        int tabWidth = Math.max(64, (tabSpace - 20) / TABS.length);
+        for (int i = 0; i < TABS.length; i++) {
+            Page target = Page.values()[i];
+            int x = tabsX + i * tabWidth;
+            addRenderableWidget(Button.builder(EasyLifeText.of(TABS[i]), b -> selectTab(target))
+                .bounds(x, 13, tabWidth - 4, 22).build());
+        }
+
+        int searchWidth = Math.min(500, Math.max(170, width - 225));
+        int searchX = (width - searchWidth) / 2;
+        search = new EditBox(font, searchX, searchY, searchWidth, 20,
+            EasyLifeText.of("ui.search"));
+        search.setMaxLength(64);
+        search.setValue(query);
+        search.setResponder(value -> {
+            query = value;
+            filterRows();
+        });
+        addRenderableWidget(search);
 
         switch (page) {
-            case HOME -> homeControls();
-            case AUCTION -> auctionControls();
-            case EXTRACTOR -> extractorControls();
+            case GENERAL -> generalPage();
+            case AUCTION -> auctionPage();
+            case PRICE -> pricePage();
+            case HOTKEYS -> hotkeyPage();
+            case UPDATE -> updatePage();
         }
+
+        int buttonWidth = Math.min(280, (width - 64) / 2);
+        addRenderableWidget(Button.builder(EasyLifeText.of("ui.cancel"), b -> onClose())
+            .bounds(width / 2 - buttonWidth - 5, height - 36, buttonWidth, 25).build());
+        addRenderableWidget(Button.builder(EasyLifeText.of("ui.save"), b -> saveAndClose())
+            .bounds(width / 2 + 5, height - 36, buttonWidth, 25).build());
+        filterRows();
     }
 
-    private void homeControls() {
-        modeCard("easylife.module.auction", systems.auctionEnabled, top + 106, true);
-        modeCard("easylife.module.price_extractor", systems.priceExtractorEnabled, top + 201, false);
-
-        button("easylife.settings.keybinds", left + 10, top + 306, halfWidth - 10, 23,
-            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
-        button(auction.autoUpdate ? "easylife.settings.updates_on" : "easylife.settings.updates_off",
-            left + halfWidth + gap, top + 306, halfWidth - 10, 23,
-            () -> {
-                auction.autoUpdate = !auction.autoUpdate;
-                EasyLifeConfig.save(auction);
-                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
+    private void generalPage() {
+        addButtonRow("ui.setting.auction", "ui.info.auction",
+            systems.auctionEnabled ? "ui.enabled" : "ui.disabled", () -> {
+                systems.auctionEnabled = !systems.auctionEnabled;
+                selectTab(Page.GENERAL);
             });
-        button("easylife.settings.close", left + (contentWidth - 164) / 2, top + 338, 164, 22, this::onClose);
+        addButtonRow("ui.setting.price", "ui.info.price",
+            systems.priceExtractorEnabled ? "ui.enabled" : "ui.disabled", () -> {
+                systems.priceExtractorEnabled = !systems.priceExtractorEnabled;
+                selectTab(Page.GENERAL);
+            });
+        addButtonRow("ui.setting.language", "ui.info.language",
+            "en_us".equals(systems.uiLanguage) ? "ui.lang.en" : "ui.lang.th", () -> {
+                systems.uiLanguage = "th_th".equals(systems.uiLanguage) ? "en_us" : "th_th";
+                // Changing UI language immediately is intentional: it does not change Minecraft's language.
+                EasyLifeSystemConfig.save(systems);
+                selectTab(Page.GENERAL);
+            });
+        addTextRow("ui.setting.modules", "ui.info.modules",
+            () -> (systems.auctionEnabled ? "Auction " : "") +
+                (systems.priceExtractorEnabled ? "Price Extractor" : "") +
+                (!systems.auctionEnabled && !systems.priceExtractorEnabled ? "OFF" : ""));
+        addTextRow("ui.setting.scanned", "ui.info.scanned",
+            () -> Integer.toString(PriceExtractorModule.getFoundCount()));
+        addButtonRow("ui.setting.keybinds", "ui.info.keybinds",
+            "ui.open_keys", this::openKeyBinds);
     }
 
-    private void modeCard(String label, boolean enabled, int y, boolean isAuction) {
-        int rowY = y + 34;
-        addRenderableWidget(Button.builder(Component.translatable(enabled
-                ? "easylife.mode.disable" : "easylife.mode.enable"), btn -> {
-            EasyLifeSystemConfig next = EasyLifeSystemConfig.get().copy();
-            if (isAuction) next.auctionEnabled = !next.auctionEnabled;
-            else next.priceExtractorEnabled = !next.priceExtractorEnabled;
-            EasyLifeSystemConfig.save(next);
-            minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
-        }).bounds(left + 14, rowY, halfWidth - 12, 22).build());
-        addRenderableWidget(Button.builder(Component.translatable("easylife.mode.settings"), btn ->
-            minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent,
-                isAuction ? Page.AUCTION : Page.EXTRACTOR))
-        ).bounds(left + halfWidth + gap, rowY, halfWidth - 12, 22).build());
-    }
-
-    private void auctionControls() {
+    private void auctionPage() {
         String[] values = auction.formValues();
-        for (int i = 0; i < fields.length; i++) {
-            int x = left + 8 + (i % 2) * (halfWidth + gap);
-            int y = top + 117 + (i / 2) * 42;
-            EditBox edit = new EditBox(font, x, y + 14, halfWidth - 16, 19,
-                Component.translatable(AUCTION_FIELDS[i]));
-            edit.setMaxLength(i == 5 ? 32 : 18);
-            edit.setValue(values[i]);
-            fields[i] = addRenderableWidget(edit);
+        for (int i = 0; i < AUCTION_FIELDS.length; i++) {
+            EditBox box = new EditBox(font, controlX, topY + i * rowHeight,
+                controlWidth, 20, EasyLifeText.of(AUCTION_FIELDS[i]));
+            box.setMaxLength(i == 5 ? 32 : 18);
+            box.setValue(values[i]);
+            auctionFields[i] = box;
+            addRow(AUCTION_FIELDS[i], "ui.info.edit", box, null);
         }
-        delay = new EditBox(font, left + 8, top + 259, halfWidth - 16, 20,
-            Component.translatable("easylife.setting.delay"));
-        delay.setMaxLength(3);
-        delay.setValue(Integer.toString(auction.betweenListingsTicks));
-        addRenderableWidget(delay);
-
-        button("easylife.settings.keybinds", left + halfWidth + gap, top + 259,
-            halfWidth - 16, 20,
-            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
-        saveButtons(this::saveAuction);
+        delayBox = new EditBox(font, controlX, topY + 6 * rowHeight,
+            controlWidth, 20, EasyLifeText.of("easylife.setting.delay"));
+        delayBox.setMaxLength(3);
+        delayBox.setValue(Integer.toString(auction.betweenListingsTicks));
+        addRow("easylife.setting.delay", "ui.info.delay", delayBox, null);
+        addButtonRow("ui.setting.keybinds", "ui.info.keybinds",
+            "ui.open_keys", this::openKeyBinds);
     }
 
-    private void extractorControls() {
-        port = new EditBox(font, left + 8, top + 168, halfWidth - 16, 21,
-            Component.translatable("easylife.extractor.port"));
-        port.setMaxLength(5);
-        port.setValue(Integer.toString(systems.extractorPort));
-        addRenderableWidget(port);
-
-        button(systems.extractorNotifications
-                ? "easylife.notify.on" : "easylife.notify.off",
-            left + halfWidth + gap, top + 168, halfWidth - 16, 21,
-            () -> {
-                EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
-                cfg.extractorNotifications = !cfg.extractorNotifications;
-                EasyLifeSystemConfig.save(cfg);
-                minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent, Page.EXTRACTOR));
+    private void pricePage() {
+        addButtonRow("ui.setting.price", "ui.info.price",
+            systems.priceExtractorEnabled ? "ui.enabled" : "ui.disabled", () -> {
+                systems.priceExtractorEnabled = !systems.priceExtractorEnabled;
+                selectTab(Page.PRICE);
             });
-
-        button("easylife.extractor.open_web", left + 8, top + 244, halfWidth - 16, 23,
-            this::openLocalWebsite);
-        button("easylife.extractor.clear", left + halfWidth + gap, top + 244, halfWidth - 16, 23,
-            PriceExtractorModule::clearItems);
-        button("easylife.settings.keybinds", left + 8, top + 281, halfWidth - 16, 21,
-            () -> minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options)));
-        saveButtons(this::saveExtractor);
+        addButtonRow("ui.setting.notifications", "ui.info.notifications",
+            systems.extractorNotifications ? "ui.enabled" : "ui.disabled", () -> {
+                systems.extractorNotifications = !systems.extractorNotifications;
+                selectTab(Page.PRICE);
+            });
+        portBox = new EditBox(font, controlX, topY + 2 * rowHeight,
+            controlWidth, 20, EasyLifeText.of("easylife.extractor.port"));
+        portBox.setMaxLength(5);
+        portBox.setValue(Integer.toString(systems.extractorPort));
+        addRow("easylife.extractor.port", "ui.info.port", portBox, null);
+        addTextRow("ui.setting.scanned", "ui.info.scanned",
+            () -> Integer.toString(PriceExtractorModule.getFoundCount()));
+        addTextRow("ui.setting.status", "ui.info.status",
+            () -> PriceExtractorModule.getStatusForLanguage(systems.uiLanguage));
+        addTextRow("ui.setting.diagnostics", "ui.info.diagnostics",
+            PriceExtractorModule::getDiagnostics);
+        addButtonRow("ui.setting.website", "ui.info.website",
+            "ui.open_website", this::openWebsite);
+        addButtonRow("ui.setting.clear", "ui.info.clear",
+            "ui.clear_now", PriceExtractorModule::clearItems);
     }
 
-    private void saveButtons(Runnable saveAction) {
-        button("easylife.settings.save", left + 8, top + 329, halfWidth - 16, 24, saveAction);
-        button("easylife.settings.cancel", left + halfWidth + gap, top + 329, halfWidth - 16,
-            24, this::onClose);
+    private void hotkeyPage() {
+        addTextRow("ui.setting.auction_key", "ui.info.auction_key", () -> "F8");
+        addTextRow("ui.setting.stop_key", "ui.info.stop_key", () -> "F9");
+        addTextRow("ui.setting.extractor_key", "ui.info.extractor_key", () -> "F7");
+        addButtonRow("ui.setting.keybinds", "ui.info.keybinds",
+            "ui.open_keys", this::openKeyBinds);
+        addTextRow("ui.setting.keyboard", "ui.info.keyboard",
+            () -> EasyLifeText.get("ui.keyboard_note"));
     }
 
-    private void saveAuction() {
-        try {
-            auction.startingPrice = fields[0].getValue().trim();
-            auction.minimumIncrement = fields[1].getValue().trim();
-            auction.buyoutPrice = fields[2].getValue().trim();
-            auction.durationSeconds = fields[3].getValue().trim();
-            auction.overtimeSeconds = fields[4].getValue().trim();
-            auction.startTime = fields[5].getValue().trim();
-            auction.betweenListingsTicks = Integer.parseInt(delay.getValue().trim());
-            EasyLifeConfig.save(auction);
-            onClose();
-        } catch (RuntimeException e) {
-            error = Component.literal("ข้อมูลไม่ถูกต้อง: " + e.getMessage());
-        }
+    private void updatePage() {
+        addButtonRow("ui.setting.autoupdate", "ui.info.autoupdate",
+            auction.autoUpdate ? "ui.enabled" : "ui.disabled", () -> {
+                auction.autoUpdate = !auction.autoUpdate;
+                selectTab(Page.UPDATE);
+            });
+        addButtonRow("ui.setting.check", "ui.info.check",
+            "ui.check_now", () -> EasyLifeUpdater.checkForUpdates(true));
+        addTextRow("ui.setting.version", "ui.info.version",
+            () -> FabricLoader.getInstance().getModContainer("scautoauction")
+                .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("?"));
+        addTextRow("ui.setting.update_status", "ui.info.update_status",
+            () -> EasyLifeUpdater.getStatusText().getString());
     }
 
-    private void saveExtractor() {
-        try {
-            systems.extractorPort = Integer.parseInt(port.getValue().trim());
-            EasyLifeSystemConfig.save(systems);
-            onClose();
-        } catch (RuntimeException e) {
-            error = Component.literal("ข้อมูลไม่ถูกต้อง: " + e.getMessage());
-        }
+    private void addButtonRow(String key, String info, String buttonKey, Runnable onPress) {
+        Button button = Button.builder(EasyLifeText.of(buttonKey), b -> onPress.run())
+            .bounds(controlX, 0, controlWidth, 22).build();
+        addRow(key, info, button, null);
     }
 
-    private void openLocalWebsite() {
-        try {
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().browse(URI.create("http://127.0.0.1:" + systems.extractorPort));
+    private void addTextRow(String key, String info, Supplier<String> dynamicValue) {
+        addRow(key, info, null, dynamicValue);
+    }
+
+    private void addRow(String key, String info, AbstractWidget widget, Supplier<String> dynamic) {
+        rows.add(new Row(key, info, widget, dynamic));
+        if (widget != null) addRenderableWidget(widget);
+    }
+
+    private void filterRows() {
+        if (rows.isEmpty()) return;
+        String term = query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (Row row : rows) {
+            String label = EasyLifeText.getIn("th_th", row.labelKey) + " "
+                + EasyLifeText.getIn("en_us", row.labelKey) + " "
+                + EasyLifeText.getIn("th_th", row.hintKey) + " "
+                + EasyLifeText.getIn("en_us", row.hintKey);
+            boolean show = term.isEmpty() || label.toLowerCase(Locale.ROOT).contains(term);
+            if (row.widget != null) {
+                row.widget.setVisible(show);
+                if (show) row.widget.setY(topY + visible * rowHeight + 6);
             }
-        } catch (Exception e) {
-            error = Component.literal("ไม่สามารถเปิดเบราว์เซอร์ได้");
+            if (show) visible++;
         }
     }
 
-    private void button(String key, int x, int y, int w, int h, Runnable action) {
-        addRenderableWidget(Button.builder(Component.translatable(key), b -> action.run())
-            .bounds(x, y, Math.max(80, w), h).build());
+    private void selectTab(Page target) {
+        stashCurrent();
+        this.page = target;
+        // Recreating only the GUI keeps the tabbed controls and state consistent.
+        this.minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent, target, query,
+            auction, systems));
+    }
+
+    private EasyLifeSettingsScreen(Screen parent, Page page, String query,
+                                   EasyLifeConfig auction, EasyLifeSystemConfig systems) {
+        this(parent, page, query);
+        this.auction = auction;
+        this.systems = systems;
+    }
+
+    private void stashCurrent() {
+        if (page == Page.AUCTION && auctionFields[0] != null) {
+            String[] values = new String[6];
+            for (int i = 0; i < 6; i++) values[i] = auctionFields[i].getValue().trim();
+            auction.startingPrice = values[0];
+            auction.minimumIncrement = values[1];
+            auction.buyoutPrice = values[2];
+            auction.durationSeconds = values[3];
+            auction.overtimeSeconds = values[4];
+            auction.startTime = values[5];
+            if (delayBox != null) {
+                try { auction.betweenListingsTicks = Integer.parseInt(delayBox.getValue().trim()); }
+                catch (NumberFormatException ignored) { }
+            }
+        }
+        if (page == Page.PRICE && portBox != null) {
+            try { systems.extractorPort = Integer.parseInt(portBox.getValue().trim()); }
+            catch (NumberFormatException ignored) { }
+        }
+    }
+
+    private void saveAndClose() {
+        try {
+            stashCurrent();
+            EasyLifeConfig.save(auction);
+            EasyLifeSystemConfig.save(systems);
+            if (auction.autoUpdate) EasyLifeUpdater.checkForUpdates(false);
+            onClose();
+        } catch (RuntimeException e) {
+            error = EasyLifeText.get("ui.invalid", e.getMessage());
+        }
+    }
+
+    private void openKeyBinds() {
+        stashCurrent();
+        minecraft.gui.setScreen(new KeyBindsScreen(this, minecraft.options));
+    }
+
+    private void openWebsite() {
+        try {
+            if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(
+                URI.create("http://127.0.0.1:" + systems.extractorPort));
+        } catch (Exception e) {
+            error = EasyLifeText.get("ui.web_failed");
+        }
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-        // No header text; only the user-supplied Siamcraft logo.
-        g.fill(left - 12, top - 8, left + contentWidth + 12, top + 369, 0xEB17171E);
-        g.outline(left - 12, top - 8, contentWidth + 24, 377, 0xFFFFA33D);
-        g.fillGradient(left - 11, top - 7, left + contentWidth + 11, top - 3,
-            0xFFFFD772, 0xFFE17C27);
-        g.blit(LOGO, width / 2 - 62, top + 4, width / 2 + 62, top + 78,
-            0.0F, 1.0F, 0.0F, 1.0F);
+    public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
+        // Header: only the Siamcraft logo. Tabs are separate navigation controls.
+        g.fill(0, 0, width, 53, 0xE8111117);
+        g.fill(0, 53, width, 54, 0x99FFB24B);
+        g.blit(LOGO, 12, 4, 121, 53, 0.0F, 1.0F, 0.0F, 1.0F);
+        g.fill(left, 108, right, height - 45, 0xA91C1C21);
+        g.fill(0, height - 46, width, height, 0xEA1A1B20);
+        super.extractRenderState(g, mx, my, delta);
 
-        // Main content is deliberately below the logo-only header.
-        if (page == Page.HOME) {
-            card(g, top + 106, systems.auctionEnabled);
-            card(g, top + 201, systems.priceExtractorEnabled);
-        } else {
-            card(g, top + 101, page == Page.AUCTION
-                ? systems.auctionEnabled : systems.priceExtractorEnabled);
-        }
-        super.extractRenderState(g, mouseX, mouseY, delta);
+        g.text(font, EasyLifeText.of("ui.search"), left + 6, searchY + 5, MUTED);
+        g.text(font, EasyLifeText.of(TABS[page.ordinal()]), left + 12, topY - 22, GOLD);
 
-        if (page == Page.HOME) {
-            label(g, "easylife.module.auction", left + 16, top + 116, GOLD);
-            label(g, systems.auctionEnabled ? "easylife.status.running" : "easylife.status.stopped",
-                left + contentWidth - 78, top + 116, systems.auctionEnabled ? 0xFF6AE7A2 : 0xFFAAAAAA);
-            label(g, "easylife.auction.short", left + 16, top + 136, 0xFFCCCFD5);
-
-            label(g, "easylife.module.price_extractor", left + 16, top + 211, GOLD);
-            label(g, systems.priceExtractorEnabled ? "easylife.status.running" : "easylife.status.stopped",
-                left + contentWidth - 78, top + 211, systems.priceExtractorEnabled ? 0xFF6AE7A2 : 0xFFAAAAAA);
-            label(g, "easylife.extractor.short", left + 16, top + 231, 0xFFCCCFD5);
-            label(g, "easylife.extractor.found",
-                left + 16, top + 263, 0xFFFFD48C, PriceExtractorModule.getFoundCount());
-        } else if (page == Page.AUCTION) {
-            label(g, "easylife.auction.settings", left + 15, top + 105, GOLD);
-            for (int i = 0; i < fields.length; i++) {
-                int x = left + 8 + (i % 2) * (halfWidth + gap);
-                int y = top + 117 + (i / 2) * 42;
-                label(g, AUCTION_FIELDS[i], x, y, TEXT);
+        String term = query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (Row row : rows) {
+            String text = EasyLifeText.getIn("th_th", row.labelKey) + " "
+                + EasyLifeText.getIn("en_us", row.labelKey) + " "
+                + EasyLifeText.getIn("th_th", row.hintKey) + " "
+                + EasyLifeText.getIn("en_us", row.hintKey);
+            if (!term.isEmpty() && !text.toLowerCase(Locale.ROOT).contains(term)) continue;
+            int y = topY + visible * rowHeight;
+            if (visible % 2 == 1) g.fill(left + 2, y, right - 2, y + rowHeight,
+                0x29111116);
+            g.text(font, EasyLifeText.of(row.labelKey), contentX, y + 4, TEXT);
+            if (rowHeight >= 34 && !row.hintKey.isBlank())
+                g.text(font, EasyLifeText.of(row.hintKey), contentX + 4, y + 18, MUTED);
+            if (row.dynamicValue != null) {
+                String value = row.dynamicValue.get();
+                if (value.length() > 62) value = value.substring(0, 59) + "...";
+                g.text(font, Component.literal(value), controlX + 6, y + 8, GOLD);
             }
-            label(g, "easylife.setting.delay", left + 8, top + 247, TEXT);
-            label(g, "easylife.auction.keyhelp", left + 8, top + 292, 0xFFB7BBC2);
-        } else {
-            label(g, "easylife.extractor.settings", left + 15, top + 109, GOLD);
-            label(g, "easylife.extractor.found", left + 15, top + 132, 0xFF6AE7A2,
-                PriceExtractorModule.getFoundCount());
-            String last = PriceExtractorModule.getLastFoundName();
-            if (last.length() > 46) last = last.substring(0, 43) + "...";
-            g.text(font, Component.literal(last), left + 15, top + 145, TEXT);
-            label(g, "easylife.extractor.port", left + 8, top + 156, TEXT);
-            label(g, "easylife.extractor.hint", left + 8, top + 218, 0xFFB7BBC2,
-                "http://127.0.0.1:" + systems.extractorPort);
-            String status = PriceExtractorModule.getStatus();
-            if (!status.isBlank()) g.text(font, Component.literal(status), left + 8, top + 312, 0xFFFF8B8B);
+            visible++;
         }
-        if (!error.getString().isEmpty()) {
-            g.centeredText(font, error, width / 2, top + 357, 0xFFFF7171);
-        }
-    }
-
-    private void card(GuiGraphicsExtractor g, int y, boolean enabled) {
-        g.fill(left + 5, y, left + contentWidth - 5, y + (page == Page.HOME ? 85 : 213),
-            enabled ? 0xF0242927 : 0xF0222229);
-        g.outline(left + 5, y, contentWidth - 10, page == Page.HOME ? 85 : 213,
-            enabled ? 0xFF587C58 : 0xFF55515B);
-    }
-
-    private void label(GuiGraphicsExtractor g, String key, int x, int y, int color, Object... args) {
-        g.text(font, Component.translatable(key, args), x, y, color);
+        if (visible == 0) g.centeredText(font, EasyLifeText.of("ui.noresults"), width / 2,
+            topY + 40, MUTED);
+        if (!error.isBlank()) g.centeredText(font, Component.literal(error),
+            width / 2, height - 56, 0xFFFF7A7A);
     }
 
     @Override
     public void onClose() {
-        if (page == Page.HOME) minecraft.gui.setScreen(parent);
-        else minecraft.gui.setScreen(new EasyLifeSettingsScreen(parent));
+        minecraft.gui.setScreen(parent);
     }
 }
