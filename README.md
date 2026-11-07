@@ -9,7 +9,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 1. ติดตั้ง Fabric Loader สำหรับ Minecraft 26.3 และ Fabric API.
 2. **ลบ SC-AutoAuction เวอร์ชันเก่าออกจาก mods ก่อน** เพื่อป้องกัน mod ID ซ้ำ.
-3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.5.jar` ในโฟลเดอร์ `.minecraft/mods`.
+3. ใส่ `Easylife-in-Siamcraft-26.3-0.2.6.jar` ในโฟลเดอร์ `.minecraft/mods`.
 4. ติดตั้ง [Mod Menu 21.0.0](https://modrinth.com/mod/modmenu) หากต้องการหน้า Settings.
 5. เข้าเกม → Mod Menu → Easylife in Siamcraft → Settings / ตั้งค่า.
 
@@ -43,7 +43,7 @@ Quality-of-life client mod for Siamcraft: sequential auction listings, a bilingu
 
 **หมายเหตุ:** ต้องติดตั้ง 0.2.5 ด้วยตนเอง *ครั้งแรก* เนื่องจาก 0.1.1 ไม่มีระบบอัปเดตตัวเอง. การอัปเดตครั้งถัดไปไม่ต้องดาวน์โหลด JAR ด้วยตนเอง (ถ้าเกม/เครื่องอนุญาตให้เขียนไฟล์). ระบบไม่สามารถอัปเดต Minecraft, Fabric หรือ Mod Menu แทนได้.
 
-**Notes:** Install v0.2.5 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
+**Notes:** Install v0.2.6 manually once; older v0.1.1 builds have no self-updater. Future versioned GitHub Releases auto-install on game shutdown. The mod only manages its own JAR.
 
 ## Release workflow
 
@@ -83,3 +83,19 @@ The mod stops if an unexpected different item occupies the staging slot, to avoi
 - Hover items on the **/worth** inventory. Open `http://127.0.0.1:8787` for live item and price details; `/data` for the latest item; `/items` for collected entries. These endpoints are local only.
 - ⚠️ **Must manually install this fixed JAR once if you are on broken 0.2.4**, because that version crashes before its built-in updater can run. Remove old `0.2.4.jar` to prevent duplicate mod IDs.
 - Build/test limitation: Java compilation, Fabric API linkage, and shutdown updater smoke tests pass in CI; live-game hover scanning is not fully validated on a Siamcraft server yet.
+
+## v0.2.6 — โหมดแยก + โลโก้ Siam Craft
+
+- ส่วนหัว Mod Menu มีเฉพาะ **โลโก้ Siam Craft** ตามภาพที่แนบ ไม่มีข้อความอื่น
+- หน้าแรกแยก Auction และ Price Extractor พร้อมเปิด/ปิดอิสระ ใช้พร้อมกันก็ได้
+- ปุ่มตั้งค่าแต่ละโมดูลเปิดหน้าแยก; แก้ปุ่มลัดด้วยหน้าควบคุมของ Minecraft (native Key Binds)
+- F8 เริ่ม/หยุด Auction, F9 หยุดฉุกเฉิน, F7 เปิด/ปิด Price Extractor (ทั้งหมดเปลี่ยนปุ่มได้)
+- Price Extractor สแกนไอเท็มที่เห็นในหน้า /worth โดยไม่ต้อง Hover โดยอ่าน component minecraft:lore จากข้อมูลที่เซิร์ฟเวอร์ส่ง
+- แจ้งเตือนสรุปของใหม่ ราคาที่เปลี่ยน และยอดสะสมในแชต; ปิดแจ้งเตือนได้
+- เว็บภายในเครื่อง: http://127.0.0.1:8787 มีเพียงรูปไอเท็มและราคา เรียงชื่อ A–Z, ราคาน้อยไปมาก หรือมากไปน้อย
+- JSON: /items รายการสะสม และ /data รายการล่าสุด
+- รูปบนเว็บใช้ asset ของ Minecraft 26.3 จาก mcasset.cloud (อาจไม่มีรูปของ Custom Item)
+- **การเปลี่ยนหน้า /worth ยังต้องทำเอง**; หลังเปลี่ยนหน้า มอดสแกนช่องที่เห็นให้อัตโนมัติ
+- ข้อมูลสแกนเก็บในหน่วยความจำขณะเกมเปิด ไม่อัปโหลดออกไปเซิร์ฟเวอร์ภายนอก
+- หากเซิร์ฟเวอร์ไม่ส่งราคาผ่าน item lore จะยังไม่แสดงราคา ไม่สร้างตัวเลขขึ้นเอง
+- Java 25 / Fabric Loader / updater ผ่าน CI แล้ว; ต้องทดสอบความถูกต้องกับปลั๊กอิน /worth ในเกมจริง
