@@ -19,45 +19,67 @@ import net.minecraft.world.item.component.ItemLore;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-/** Scans the server-supplied item lore of visible /worth slots, no mouse hover needed. */
+/**
+ * /worth price scanner.
+ *
+ * Important: data sent by servers can become visible only after Minecraft
+ * assembles the display tooltip. Do not rely only on DataComponents.LORE.
+ * Read actual vanilla/container tooltip with an item-lore fallback.
+ */
 public final class PriceExtractorModule implements AutomationModule {
     private static final KeyMapping TOGGLE = KeyMappingHelper.registerKeyMapping(new KeyMapping(
         "key.scautoauction.extractor", InputConstants.Type.KEYBOARD, InputConstants.KEY_F7, KeyMapping.Category.MISC));
-    private static final Pattern PRICE = Pattern.compile("([0-9][0-9,]*(?:\\.[0-9]+)?)");
     private static final Gson JSON = new Gson();
     private static final int MAX_ITEMS = 2048;
     private static final Map<String, PriceEntry> ENTRIES = new LinkedHashMap<>();
+
     private static volatile String lastItem = "ยังไม่พบข้อมูล";
     private static volatile String lastJson = "{}";
     private static volatile String lastError = "";
-    private static volatile int itemCount;
+    private static volatile String statusTh = "ยังไม่เริ่ม";
+    private static volatile String statusEn = "Not started";
+    private static volatile int itemCount, lastScanned, lastPriceLines;
 
     private HttpServer server;
     private int serverPort = -1;
-    private int ticks;
+    private int ticks, emptyRounds, lastMenuId = Integer.MIN_VALUE;
+    private String screenTitle = "";
+    private boolean warnedNoPrice;
+    private Method containerTooltipMethod;
+    private boolean tooltipLookupDone;
 
     public static int getFoundCount() { return itemCount; }
     public static String getLastFoundName() { return lastItem; }
-    public static String getStatus() { return lastError; }
+    public static String getStatus() { return lastError.isBlank() ? statusTh : lastError; }
+    public static String getStatusForLanguage(String language) {
+        String status = "en_us".equals(language) ? statusEn : statusTh;
+        return lastError.isBlank() ? status : lastError;
+    }
+    public static String getDiagnostics() {
+        return "Slots: " + lastScanned + " • Price lines: " + lastPriceLines
+            + " • Total: " + itemCount;
+    }
 
     public static synchronized void clearItems() {
         ENTRIES.clear();
         itemCount = 0;
         lastItem = "ยังไม่พบข้อมูล";
         lastJson = "{}";
+        lastPriceLines = 0;
+        lastScanned = 0;
+        statusTh = "ล้างข้อมูลแล้ว";
+        statusEn = "Scan results cleared";
     }
 
     @Override public String id() { return "price_extractor"; }
@@ -70,77 +92,149 @@ public final class PriceExtractorModule implements AutomationModule {
             EasyLifeSystemConfig cfg = EasyLifeSystemConfig.get().copy();
             cfg.priceExtractorEnabled = !cfg.priceExtractorEnabled;
             EasyLifeSystemConfig.save(cfg);
-            notify(mc, "Price Extractor: " + (cfg.priceExtractorEnabled ? "เปิด" : "ปิด"));
+            say(mc, cfg.priceExtractorEnabled
+                ? "เปิดสแกนราคาแล้ว • เปิด /worth เพื่อเริ่ม"
+                : "ปิดสแกนราคาแล้ว");
         }
         if (!EasyLifeSystemConfig.get().priceExtractorEnabled) {
             if (server != null) stopServer();
+            statusTh = "ระบบปิดอยู่";
+            statusEn = "Scanner disabled";
             return;
         }
         ensureServer();
         if (++ticks % 12 != 0 || mc == null || mc.player == null || mc.gui == null) return;
-        Screen screen = mc.gui.screen();
-        if (!(screen instanceof AbstractContainerScreen<?>)) return;
-        if (!screen.getTitle().getString().toLowerCase(Locale.ROOT).contains("worth")) return;
+        Screen current = mc.gui.screen();
+        if (!(current instanceof AbstractContainerScreen<?> screen)) {
+            statusTh = "รอเปิดหน้า /worth";
+            statusEn = "Open /worth to scan prices";
+            emptyRounds = 0;
+            return;
+        }
+        String title = screen.getTitle().getString();
+        if (!title.toLowerCase(Locale.ROOT).contains("worth")) {
+            statusTh = "รอเปิดหน้า /worth (" + title + ")";
+            statusEn = "Waiting for /worth (" + title + ")";
+            emptyRounds = 0;
+            return;
+        }
 
-        // The last 36 slots are the player's inventory in a vanilla-style chest menu.
-        // Never click any slots; use only the item data sent by the server.
-        List<Slot> slots = mc.player.containerMenu.slots;
+        List<Slot> slots = screen.getMenu().slots;
+        int menuId = screen.getMenu().containerId;
+        if (menuId != lastMenuId || !title.equals(screenTitle)) {
+            emptyRounds = 0;
+            warnedNoPrice = false;
+            lastMenuId = menuId;
+            screenTitle = title;
+            say(mc, "พบหน้า " + title + " • กำลังอ่านราคาอัตโนมัติ");
+        }
+
+        // The last 36 slots represent player inventory in chest-like menus.
         int topSlots = Math.max(0, slots.size() - 36);
-        int added = 0, updated = 0;
+        if (topSlots == 0) {
+            statusTh = "พบ /worth แต่ไม่พบช่องรายการ";
+            statusEn = "/worth detected, no listing slots";
+            return;
+        }
+
+        int added = 0, updated = 0, seen = 0, examined = 0, linesFound = 0;
         String newest = "";
         synchronized (PriceExtractorModule.class) {
             for (int i = 0; i < topSlots; i++) {
                 ItemStack stack = slots.get(i).getItem();
                 if (stack.isEmpty()) continue;
-                PriceEntry entry = readItem(stack);
-                if (entry == null) continue;
-                String key = entry.itemId;
+                seen++;
+                List<String> tooltip = itemTooltip(mc, screen, stack);
+                examined += tooltip.size();
+                PriceTextParser.Prices prices = PriceTextParser.parse(tooltip);
+                if (!prices.found()) continue;
+                linesFound++;
+
+                String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+                String name = stack.getHoverName().getString();
+                String key = itemId + "|" + name;
                 if (ENTRIES.size() >= MAX_ITEMS && !ENTRIES.containsKey(key)) continue;
-                PriceEntry old = ENTRIES.put(key, entry);
-                if (old == null) { added++; newest = entry.name + " • " + entry.price; lastJson = JSON.toJson(entry); }
-                else if (!old.price.equals(entry.price)) { updated++; newest = entry.name + " • " + entry.price; lastJson = JSON.toJson(entry); }
+                PriceEntry entry = new PriceEntry(itemId, name, prices.perItem(),
+                    prices.perStack(), Instant.now().toString());
+                PriceEntry previous = ENTRIES.get(key);
+                if (previous == null || !previous.price.equals(entry.price)
+                    || !previous.perStack.equals(entry.perStack)) {
+                    ENTRIES.put(key, entry);
+                    if (previous == null) added++;
+                    else updated++;
+                    newest = name + " = " + entry.price;
+                    lastJson = JSON.toJson(entry);
+                }
             }
             itemCount = ENTRIES.size();
             if (!newest.isBlank()) lastItem = newest;
         }
+        lastScanned = seen;
+        lastPriceLines = linesFound;
+        statusTh = "กำลังสแกน /worth • พบช่อง " + seen + " • มีราคา " + linesFound
+            + " • สะสม " + itemCount;
+        statusEn = "Scanning /worth • Items " + seen + " • Priced " + linesFound
+            + " • Saved " + itemCount;
         if ((added > 0 || updated > 0) && EasyLifeSystemConfig.get().extractorNotifications) {
-            notify(mc, "พบใหม่ " + added + " • เปลี่ยนราคา " + updated + " • รวม " + itemCount
-                + " รายการ | " + newest);
+            say(mc, "พบใหม่ " + added + " • ราคาเปลี่ยน " + updated + " • สะสม " + itemCount
+                + " | " + newest);
+        }
+        if (seen > 0 && linesFound == 0 && ++emptyRounds >= 5 && !warnedNoPrice) {
+            warnedNoPrice = true;
+            say(mc, "พบ /worth " + seen + " ช่อง แต่ยังไม่พบราคาจาก Tooltip"
+                + " • ดูสถานะใน Easylife → สแกนราคา");
+            System.err.println("[Easylife] /worth found " + seen
+                + " slots and " + examined + " tooltip lines, but no recognized price labels.");
+        } else if (linesFound > 0) {
+            emptyRounds = 0;
         }
     }
 
-    /** Only include priced server items: decorative buttons and navigation controls are ignored. */
-    private static PriceEntry readItem(ItemStack stack) {
+    private List<String> itemTooltip(Minecraft mc, AbstractContainerScreen<?> screen, ItemStack stack) {
+        List<String> all = new ArrayList<>();
+        // Primary source: actual on-screen tooltip including client-added lines.
+        try {
+            if (!tooltipLookupDone) {
+                tooltipLookupDone = true;
+                containerTooltipMethod = AbstractContainerScreen.class.getDeclaredMethod(
+                    "getTooltipFromContainerItem", ItemStack.class);
+                containerTooltipMethod.setAccessible(true);
+            }
+            if (containerTooltipMethod != null) {
+                Object result = containerTooltipMethod.invoke(screen, stack);
+                if (result instanceof List<?> values) {
+                    for (Object value : values) {
+                        if (value instanceof Component text) all.add(text.getString());
+                    }
+                }
+            }
+        } catch (ReflectiveOperationException | RuntimeException error) {
+            if (lastError.isBlank()) {
+                lastError = "Tooltip reflection: " + error.getClass().getSimpleName();
+                System.err.println("[Easylife] " + lastError + ": " + error.getMessage());
+            }
+        }
+        // The base vanilla tooltip is a safe fallback when a mod changes the container tooltip.
+        try {
+            for (Component line : Screen.getTooltipFromItem(mc, stack)) {
+                String value = line.getString();
+                if (!all.contains(value)) all.add(value);
+            }
+        } catch (RuntimeException ignored) {
+        }
         ItemLore lore = stack.get(DataComponents.LORE);
-        if (lore == null) return null;
-        String perItem = "", perStack = "";
-        for (Component line : lore.lines()) {
-            String text = line.getString().trim();
-            String lower = text.toLowerCase(Locale.ROOT);
-            if (lower.contains("ราคาต่อชิ้น") || lower.contains("price per item")) {
-                perItem = extractPrice(text);
-            }
-            if (lower.contains("ราคาต่อสแตค") || lower.contains("ราคาต่อสแต็ก")
-                || lower.contains("price per stack")) {
-                perStack = extractPrice(text);
+        if (lore != null) {
+            for (Component line : lore.lines()) {
+                String value = line.getString();
+                if (!all.contains(value)) all.add(value);
             }
         }
-        if (perItem.isEmpty() && perStack.isEmpty()) return null;
-        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        String name = stack.getHoverName().getString();
-        return new PriceEntry(id, name, perItem, perStack, Instant.now().toString());
+        return all;
     }
 
-    private static String extractPrice(String line) {
-        String value = line.contains(":") ? line.substring(line.indexOf(':') + 1) : line;
-        Matcher matcher = PRICE.matcher(value);
-        return matcher.find() ? matcher.group(1) : "";
-    }
-
-    private static void notify(Minecraft mc, String text) {
-        if (mc != null && mc.player != null) {
-            mc.player.sendSystemMessage(Component.literal("[Easylife] " + text));
-        }
+    private static void say(Minecraft mc, String line) {
+        if (mc != null && mc.player != null)
+            mc.player.sendSystemMessage(Component.literal("[Easylife] " + line));
     }
 
     private synchronized void ensureServer() {
@@ -165,6 +259,8 @@ public final class PriceExtractorModule implements AutomationModule {
             String message = "เปิดเว็บพอร์ต " + port + " ไม่ได้";
             if (!message.equals(lastError)) System.err.println("[Easylife] " + message + ": " + e);
             lastError = message;
+            statusTh = message;
+            statusEn = "Cannot open local port " + port;
         }
     }
 
@@ -181,7 +277,8 @@ public final class PriceExtractorModule implements AutomationModule {
     }
 
     private static String loadWebsite() {
-        try (InputStream input = PriceExtractorModule.class.getResourceAsStream("/assets/scautoauction/web/index.html")) {
+        try (InputStream input = PriceExtractorModule.class.getResourceAsStream(
+            "/assets/scautoauction/web/index.html")) {
             if (input == null) return "<h1>Missing Price Extractor page</h1>";
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
@@ -205,6 +302,7 @@ public final class PriceExtractorModule implements AutomationModule {
         final String perStack;
         final String price;
         final String updatedAt;
+
         PriceEntry(String itemId, String name, String perItem, String perStack, String updatedAt) {
             this.itemId = itemId;
             this.name = name;
