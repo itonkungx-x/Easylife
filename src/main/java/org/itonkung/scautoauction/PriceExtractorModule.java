@@ -24,6 +24,7 @@ import net.minecraft.world.item.component.ItemLore;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -74,6 +75,8 @@ public final class PriceExtractorModule implements AutomationModule {
     private boolean warnedNoPrice;
     private Method containerTooltipMethod;
     private boolean tooltipLookupDone;
+    private Field hoveredSlotField;
+    private boolean hoveredSlotLookupDone;
 
     public static int getFoundCount() { return itemCount; }
     public static String getLastFoundName() { return lastItem; }
@@ -277,13 +280,37 @@ public final class PriceExtractorModule implements AutomationModule {
         }
     }
 
+    /** Read the actively hovered slot through an optional runtime field.
+     * Uses reflection because 26.3 mapping variants expose different accessor
+     * signatures. A failed lookup never prevents tooltip callbacks from running.
+     */
+    private Slot hoveredSlotFromScreen(AbstractContainerScreen<?> screen) {
+        if (!hoveredSlotLookupDone) {
+            hoveredSlotLookupDone = true;
+            try {
+                hoveredSlotField = AbstractContainerScreen.class.getDeclaredField("hoveredSlot");
+                hoveredSlotField.setAccessible(true);
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                hoveredSlotField = null;
+                System.err.println("[Easylife] hoveredSlot field unavailable: " + e.getMessage());
+            }
+        }
+        if (hoveredSlotField == null) return null;
+        try {
+            Object slot = hoveredSlotField.get(screen);
+            return slot instanceof Slot hovered ? hovered : null;
+        } catch (IllegalAccessException e) {
+            return null;
+        }
+    }
+
     /**
      * Active hover fallback: the actual slot beneath the cursor can be inspected
      * even when a modded tooltip renderer does not dispatch Fabric tooltip events.
      */
     private void scanHoveredSlot(Minecraft mc, AbstractContainerScreen<?> screen) {
         try {
-            Slot hovered = screen.getSlotUnderMouse();
+            Slot hovered = hoveredSlotFromScreen(screen);
             if (hovered == null || hovered.getItem().isEmpty()) return;
             List<Slot> slots = screen.getMenu().slots;
             int index = slots.indexOf(hovered);
